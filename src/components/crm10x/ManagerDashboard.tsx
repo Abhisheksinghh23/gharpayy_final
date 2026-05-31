@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ConversionIntelligence } from "./ConversionIntelligence";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, CartesianGrid } from "recharts";
 
 const OBJECTION_LABELS: Record<string, string> = {
   "price-too-high": "Price too high",
@@ -99,6 +100,24 @@ export function ManagerDashboard() {
   const objBreakdown = topObjections(objections);
   const velocity = avgStageVelocity(leads);
 
+  // Recharts Funnel Formatting
+  const funnelChartData = useMemo(() => {
+    return funnel.map((f) => ({
+      name: f.stage.replace("-", " "),
+      leads: f.count,
+      conversion: f.conversionToNext
+    }));
+  }, [funnel]);
+
+  // Recharts Objections Formatting
+  const objectionsChartData = useMemo(() => {
+    return objBreakdown.map((o) => ({
+      name: OBJECTION_LABELS[o.code] ?? o.code,
+      count: o.count,
+      pct: o.pct
+    })).slice(0, 5);
+  }, [objBreakdown]);
+
   return (
     <div className="space-y-6 p-4 md:p-6 max-w-7xl mx-auto">
       <div>
@@ -119,36 +138,62 @@ export function ManagerDashboard() {
       <ConversionIntelligence />
 
       {/* Funnel */}
-      <Card className="p-4 space-y-3">
+      <Card className="p-4 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold">Funnel · where leads drop</h2>
+          <h2 className="font-display text-lg font-semibold">Funnel Velocity & Volumes</h2>
           <span className="text-xs text-muted-foreground">avg booking velocity {velocity}d</span>
         </div>
-        <div className="space-y-1.5">
-          {funnel.map((row, i) => {
-            const next = funnel[i + 1];
-            if (!next) return null;
-            const isLow = row.conversionToNext < 35;
-            const isCrit = row.conversionToNext < 20;
-            return (
-              <div key={row.stage} className="flex items-center gap-2 text-sm">
-                <span className="w-32 capitalize">{row.stage.replace("-", " ")}</span>
-                <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                <span className="w-32 capitalize text-muted-foreground">{next.stage.replace("-", " ")}</span>
-                <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${isCrit ? "bg-destructive" : isLow ? "bg-warning" : "bg-success"}`}
-                    style={{ width: `${row.conversionToNext}%` }}
-                  />
+        
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-7 h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={funnelChartData} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border)/0.5)" />
+                <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={9} tickLine={false} axisLine={false} />
+                <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={9} tickLine={false} axisLine={false} width={90} className="capitalize" />
+                <Tooltip
+                  contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "8px", fontSize: "11px" }}
+                  labelStyle={{ color: "hsl(var(--foreground))", fontWeight: "bold" }}
+                  itemStyle={{ color: "hsl(var(--primary))" }}
+                  formatter={(v) => [`${v} leads`, "Active Volume"]}
+                />
+                <Bar dataKey="leads" radius={[0, 4, 4, 0]} barSize={12}>
+                  {funnelChartData.map((entry, index) => {
+                    const colors = [
+                      "hsl(var(--info))",
+                      "hsl(var(--primary))",
+                      "hsl(var(--accent))",
+                      "hsl(var(--warning))",
+                      "hsl(var(--success))",
+                    ];
+                    return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="lg:col-span-5 flex flex-col justify-center space-y-2 border-t lg:border-t-0 lg:border-l border-border pt-4 lg:pt-0 lg:pl-6">
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Stage Conversions</div>
+            {funnel.map((row, i) => {
+              const next = funnel[i + 1];
+              if (!next) return null;
+              const isLow = row.conversionToNext < 35;
+              const isCrit = row.conversionToNext < 20;
+              return (
+                <div key={row.stage} className="flex items-center justify-between text-xs py-1 border-b border-border/30 last:border-0">
+                  <span className="capitalize text-muted-foreground">{row.stage.replace("-", " ")} → {next.stage.replace("-", " ")}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`font-mono font-semibold ${isCrit ? "text-destructive" : isLow ? "text-warning" : "text-success"}`}>
+                      {row.conversionToNext}%
+                    </span>
+                    {isCrit && <Badge variant="destructive" className="text-[8px] py-0 px-1 font-bold h-4">CRIT</Badge>}
+                    {!isCrit && isLow && <Badge variant="outline" className="text-[8px] py-0 px-1 border-warning text-warning h-4">LOW</Badge>}
+                  </div>
                 </div>
-                <span className={`w-16 text-right text-xs font-mono ${isCrit ? "text-destructive font-bold" : isLow ? "text-warning" : "text-success"}`}>
-                  {row.conversionToNext}%
-                </span>
-                {isCrit && <Badge variant="destructive" className="text-[10px]">CRITICAL</Badge>}
-                {!isCrit && isLow && <Badge variant="outline" className="text-[10px] border-warning text-warning">LOW</Badge>}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </Card>
 
@@ -196,36 +241,58 @@ export function ManagerDashboard() {
             <AlertTriangle className="h-4 w-4 text-destructive" /> Red flags · act now
           </h2>
           {redFlags.length === 0 && <p className="text-xs text-muted-foreground">All clear.</p>}
-          {redFlags.map((f, i) => {
-            const tcm = tcms.find((t) => t.id === f.lead.assignedTcmId);
-            return (
-              <div key={i} className="flex items-center justify-between text-xs border-b border-border/50 py-1.5">
-                <div>
-                  <div className="font-medium">{f.lead.name}</div>
-                  <div className="text-muted-foreground text-[10px]">{tcm?.name ?? "—"} · {f.detail}</div>
+          <div className="space-y-1">
+            {redFlags.map((f, i) => {
+              const tcm = tcms.find((t) => t.id === f.lead.assignedTcmId);
+              return (
+                <div key={i} className="flex items-center justify-between text-xs border-b border-border/50 py-1.5 last:border-0">
+                  <div>
+                    <div className="font-medium">{f.lead.name}</div>
+                    <div className="text-muted-foreground text-[10px]">{tcm?.name ?? "—"} · {f.detail}</div>
+                  </div>
+                  <Badge variant="outline" className="text-[10px] capitalize">{f.kind.replace(/-/g, " ")}</Badge>
                 </div>
-                <Badge variant="outline" className="text-[10px] capitalize">{f.kind.replace(/-/g, " ")}</Badge>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </Card>
 
         {/* Objection breakdown */}
         <Card className="p-4 space-y-2">
           <h2 className="font-display text-lg font-semibold flex items-center gap-2">
-            <Zap className="h-4 w-4" /> Top blockers this period
+            <Zap className="h-4 w-4 text-accent" /> Top blockers this period
           </h2>
           {objBreakdown.length === 0 && <p className="text-xs text-muted-foreground">No objections logged yet. Start capturing on every "Answered" call.</p>}
-          {objBreakdown.map((o) => (
-            <div key={o.code} className="flex items-center gap-2 text-sm">
-              <span className="w-32">{OBJECTION_LABELS[o.code] ?? o.code}</span>
-              <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                <div className="h-full rounded-full bg-destructive" style={{ width: `${o.pct}%` }} />
+          
+          {objBreakdown.length > 0 && (
+            <div className="space-y-3">
+              <div className="h-40 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={objectionsChartData} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border)/0.5)" />
+                    <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={9} tickLine={false} axisLine={false} />
+                    <YAxis type="category" dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={9} tickLine={false} axisLine={false} width={80} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "8px", fontSize: "11px" }}
+                      labelStyle={{ color: "hsl(var(--foreground))", fontWeight: "bold" }}
+                      itemStyle={{ color: "hsl(var(--destructive))" }}
+                      formatter={(v) => [`${v} occurrences`, "Blockers count"]}
+                    />
+                    <Bar dataKey="count" fill="hsl(var(--destructive)/0.7)" radius={[0, 4, 4, 0]} barSize={10} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-              <span className="w-12 text-right text-xs font-mono">{o.pct}%</span>
-              <span className="w-8 text-right text-[10px] text-muted-foreground">{o.count}</span>
+              
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {objBreakdown.slice(0, 4).map((o) => (
+                  <div key={o.code} className="rounded-md bg-muted/40 p-2 flex justify-between items-center">
+                    <span className="truncate max-w-[70%] font-medium text-foreground">{OBJECTION_LABELS[o.code] ?? o.code}</span>
+                    <span className="font-mono text-destructive font-semibold">{o.pct}%</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
+          )}
         </Card>
       </div>
 

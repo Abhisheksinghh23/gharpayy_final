@@ -2,9 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
 import { useApp } from "@/lib/store";
 import { useMemo } from "react";
-import { IndianRupee, TrendingUp, Users, Building2 } from "lucide-react";
+import { IndianRupee, TrendingUp, Users, Building2, Download } from "lucide-react";
 import { format, subDays, startOfDay } from "date-fns";
 import { useMountedNow } from "@/hooks/use-now";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { exportToCSV } from "@/lib/export";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/revenue")({
   head: () => ({
@@ -77,16 +81,44 @@ function RevenuePage() {
   const prev7 = trend.slice(-14, -7).reduce((s, t) => s + t.amt, 0);
   const wow = prev7 > 0 ? Math.round(((last7 - prev7) / prev7) * 100) : 0;
 
+  const handleExportBookings = () => {
+    const csvData = bookings.map((b) => {
+      const lead = leads.find((l) => l.id === b.leadId);
+      const tcm = tcms.find((t) => t.id === b.tcmId);
+      const prop = properties.find((p) => p.id === b.propertyId);
+      return {
+        id: b.id,
+        amount: b.amount,
+        propertyName: prop?.name ?? "Unknown",
+        tcmName: tcm?.name ?? "Unknown",
+        leadName: lead?.name ?? "Unknown",
+        leadPhone: lead?.phone ?? "Unknown",
+        leadSource: lead?.source ?? "Unknown",
+        timestamp: b.ts,
+      };
+    });
+    exportToCSV(csvData, "gharpayy_bookings_export", [
+      "Booking ID", "MRR Value (₹)", "Property Name", "Closing Agent", "Lead Name", "Lead Phone", "Lead Source", "Closed Date"
+    ]);
+    toast.success(`Successfully exported ${bookings.length} bookings to CSV`);
+  };
+
   return (
     <AppShell>
       <div className="space-y-6">
-        <header>
-          <h1 className="font-display text-2xl font-semibold tracking-tight inline-flex items-center gap-2">
-            <IndianRupee className="h-6 w-6 text-success" /> Revenue
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Live MRR closed, broken down by closer, property, and source.
-          </p>
+        <header className="flex items-end justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="font-display text-2xl font-semibold tracking-tight inline-flex items-center gap-2">
+              <IndianRupee className="h-6 w-6 text-success" /> Revenue
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Live MRR closed, broken down by closer, property, and source.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={handleExportBookings} className="h-9 gap-1 text-xs bg-card border-border">
+            <Download className="h-3.5 w-3.5" />
+            Export Bookings
+          </Button>
         </header>
 
         {/* KPIs */}
@@ -110,15 +142,27 @@ function RevenuePage() {
             {trend.length === 0 ? (
               <div className="text-xs text-muted-foreground text-center py-8">Loading…</div>
             ) : (
-              <div className="flex items-end gap-1 h-32">
-                {trend.map((t, i) => (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
-                    <div className="w-full relative" style={{ height: `${(t.amt / maxTrend) * 100}%`, minHeight: t.amt > 0 ? "4px" : "0" }}>
-                      <div className="absolute inset-0 bg-success/70 group-hover:bg-success rounded-sm transition-colors" />
-                    </div>
-                    {i % 5 === 0 && <span className="text-[9px] font-mono text-muted-foreground">{t.day.split(" ")[1]}</span>}
-                  </div>
-                ))}
+              <div className="h-48 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={trend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorMRR" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--success))" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="hsl(var(--success))" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border)/0.5)" />
+                    <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" fontSize={9} tickLine={false} axisLine={false} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={9} tickLine={false} axisLine={false} tickFormatter={(v) => `₹${v/1000}k`} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "8px", fontSize: "11px" }}
+                      labelStyle={{ color: "hsl(var(--foreground))", fontWeight: "bold" }}
+                      itemStyle={{ color: "hsl(var(--success))" }}
+                      formatter={(value) => [`₹${Number(value).toLocaleString()}`, "MRR Closed"]}
+                    />
+                    <Area type="monotone" dataKey="amt" stroke="hsl(var(--success))" strokeWidth={2} fillOpacity={1} fill="url(#colorMRR)" />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
             )}
           </div>

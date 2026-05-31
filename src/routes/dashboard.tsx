@@ -3,12 +3,13 @@ import { AppShell } from "@/components/AppShell";
 import { useApp, computePropertyMetrics } from "@/lib/store";
 import { KpiCard } from "@/components/atoms";
 import { format } from "date-fns";
-import { AlertTriangle, ArrowUpRight, CalendarPlus, Flame, Building2, Zap, Sun, TrendingUp, Sparkles, IndianRupee } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, CalendarPlus, Flame, Building2, Zap, Sun, TrendingUp, Sparkles, IndianRupee, Brain } from "lucide-react";
 import { useMemo } from "react";
 import { useMountedNow } from "@/hooks/use-now";
 import { buildDoNextQueue, liveConfidence, intentFor } from "@/lib/engine";
 import { scanRevivals } from "@/lib/revival";
 import { QuickActionRow } from "@/components/QuickActionRow";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -21,7 +22,7 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 function DashboardPage() {
-  const { leads, tours, followUps, properties, role, currentTcmId, selectLead, bookings, handoffs } = useApp();
+  const { leads, tours, followUps, properties, role, currentTcmId, selectLead, bookings, handoffs, tcms } = useApp();
   const [now, mounted] = useMountedNow();
 
   const filterTcm = role === "tcm" ? currentTcmId : undefined;
@@ -48,6 +49,89 @@ function DashboardPage() {
   const overdueFu = followUps.filter((f) => !f.done && +new Date(f.dueAt) < now).length;
   const monthlyRevenue = bookings.reduce((s, b) => s + b.amount, 0);
   const unreadHandoffs = handoffs.filter((h) => !h.read && h.to === role).length;
+
+  // Smart Copilot Recommendations
+  const copilotInsights = useMemo(() => {
+    const list: {
+      id: string;
+      title: string;
+      description: string;
+      tone: "warning" | "info" | "success" | "danger";
+      actionLabel: string;
+      onAction: () => void;
+    }[] = [];
+
+    // 1. Post-tour report missing
+    incompleteTours.forEach((t) => {
+      const lead = leads.find((l) => l.id === t.leadId);
+      if (lead) {
+        list.push({
+          id: `post-tour-${t.id}`,
+          title: "SLA Warning: Post-Tour report pending",
+          description: `Tour at ${properties.find(p => p.id === t.propertyId)?.name} for ${lead.name} needs a visit outcome.`,
+          tone: "danger",
+          actionLabel: "Open Form",
+          onAction: () => selectLead(lead.id)
+        });
+      }
+    });
+
+    // 2. High Vacancy
+    properties.forEach((p) => {
+      const vacancyRate = p.vacantBeds / p.totalBeds;
+      if (vacancyRate >= 0.35 && p.vacantBeds > 1) {
+        list.push({
+          id: `vacancy-${p.id}`,
+          title: `High Vacancy at ${p.name}`,
+          description: `${p.vacantBeds} vacant beds in ${p.area}. Pitch warm leads or start a revival sequence.`,
+          tone: "warning",
+          actionLabel: "View Property",
+          onAction: () => {
+            toast.info(`Opening Supply Hub details for ${p.name}`);
+            window.location.hash = `/supply-hub/${p.id}`;
+          }
+        });
+      }
+    });
+
+    // 3. Idle Leads
+    leads.forEach((l) => {
+      if (l.stage !== "booked" && l.stage !== "dropped") {
+        const idleDays = Math.round((Date.now() - new Date(l.updatedAt).getTime()) / 86400_000);
+        if (idleDays >= 3) {
+          list.push({
+            id: `idle-${l.id}`,
+            title: `Neglected Lead: ${l.name}`,
+            description: `Idle for ${idleDays} days in stage "${l.stage}". Consider a follow-up call.`,
+            tone: "info",
+            actionLabel: "Open Lead",
+            onAction: () => selectLead(l.id)
+          });
+        }
+      }
+    });
+
+    // 4. TCM Load Imbalance
+    const activeTcms = tcms.map(t => {
+      const count = leads.filter(l => l.assignedTcmId === t.id && l.stage !== "booked" && l.stage !== "dropped").length;
+      return { t, count };
+    });
+    const maxAgent = activeTcms.sort((a,b) => b.count - a.count)[0];
+    if (maxAgent && maxAgent.count > 6) {
+      list.push({
+        id: `imbalance-${maxAgent.t.id}`,
+        title: "TCM Workload Alert",
+        description: `${maxAgent.t.name} is managing ${maxAgent.count} active leads. Consider reassigning.`,
+        tone: "warning",
+        actionLabel: "Review TCMs",
+        onAction: () => {
+          toast.success("Opening team distribution panel");
+        }
+      });
+    }
+
+    return list.slice(0, 3); // top 3 insights
+  }, [leads, tours, properties, tcms, selectLead, incompleteTours]);
 
   return (
     <AppShell>
@@ -85,6 +169,52 @@ function DashboardPage() {
           <KpiCard label="Conversion rate" value={`${conversion}%`} sub={`${booked} booked total`} tone="success" />
           <KpiCard label="MRR closed" value={`₹${(monthlyRevenue / 1000).toFixed(0)}k`} sub={`${bookings.length} booking${bookings.length === 1 ? "" : "s"}`} tone="success" />
         </div>
+
+        {/* Smart Copilot Insights */}
+        {copilotInsights.length > 0 && (
+          <section className="rounded-xl border border-border bg-card overflow-hidden">
+            <header className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/20">
+              <div className="flex items-center gap-2">
+                <Brain className="h-4 w-4 text-accent animate-pulse" />
+                <h2 className="font-display text-sm font-semibold">Arena Smart Copilot Insights</h2>
+              </div>
+              <span className="text-[10px] text-muted-foreground font-mono">active recommendations</span>
+            </header>
+            <div className="divide-y divide-border">
+              {copilotInsights.map((insight) => {
+                const borderTone = 
+                  insight.tone === "danger" ? "border-l-destructive bg-destructive/5" :
+                  insight.tone === "warning" ? "border-l-warning bg-warning/5" :
+                  insight.tone === "success" ? "border-l-success bg-success/5" : "border-l-info bg-info/5";
+                
+                const badgeTone = 
+                  insight.tone === "danger" ? "bg-destructive/15 text-destructive" :
+                  insight.tone === "warning" ? "bg-warning/15 text-warning-foreground" :
+                  insight.tone === "success" ? "bg-success/15 text-success" : "bg-info/15 text-info";
+
+                return (
+                  <div key={insight.id} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border-l-4 ${borderTone}`}>
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${badgeTone}`}>
+                          {insight.tone === "danger" ? "Critical" : insight.tone === "warning" ? "Alert" : "Insight"}
+                        </span>
+                        <h4 className="text-xs font-semibold text-foreground">{insight.title}</h4>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{insight.description}</p>
+                    </div>
+                    <button 
+                      onClick={insight.onAction}
+                      className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-card px-3 text-[11px] font-semibold text-foreground hover:bg-muted transition-all shrink-0 self-start sm:self-center"
+                    >
+                      {insight.actionLabel}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Today's queue (top 5 quick view) */}
         <section className="rounded-xl border border-border bg-card overflow-hidden">

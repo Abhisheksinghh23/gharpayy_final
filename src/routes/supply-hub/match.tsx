@@ -27,6 +27,7 @@ function SupplyHubMatch() {
     occupancy: "Any",
   });
   const [submitted, setSubmitted] = useState(false);
+  const [transitMode, setTransitMode] = useState<"2-wheeler" | "cab" | "metro">("2-wheeler");
 
   const results = useMemo(() => (submitted ? matchLead(lead).slice(0, 12) : []), [lead, submitted]);
 
@@ -76,12 +77,19 @@ function SupplyHubMatch() {
               <option>Both</option><option>Working</option><option>Student</option>
             </select>
           </Field>
+          <Field label="Preferred Transit">
+            <select value={transitMode} onChange={(e) => setTransitMode(e.target.value as any)} className="input">
+              <option value="2-wheeler">🏍️ 2-Wheeler (Quickest)</option>
+              <option value="cab">🚗 Cab / Auto (Comfortable)</option>
+              <option value="metro">🚇 Namma Metro (Traffic-free)</option>
+            </select>
+          </Field>
           <Field label="Notes">
             <input value={lead.notes ?? ""} onChange={(e) => setLead({ ...lead, notes: e.target.value })} className="input" placeholder="Optional" />
           </Field>
-          <div className="flex items-end">
+          <div className="flex items-end md:col-span-3 justify-end mt-2">
             <button type="submit" className="inline-flex items-center gap-1 rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:opacity-90">
-              <Sparkles className="h-4 w-4" /> Match
+              <Sparkles className="h-4 w-4" /> Match &amp; Optimize Commute
             </button>
           </div>
         </form>
@@ -101,8 +109,9 @@ function SupplyHubMatch() {
               {results.map((r) => {
                 const rt = rating(r.total);
                 const sc = scarcity(r.pg);
+                const cStats = calculateCommuteStats(r.commuteKm, transitMode);
                 return (
-                  <Link to="/supply-hub/$id" params={{ id: r.pg.id }} key={r.pg.id} className="block rounded-lg border bg-card p-4 hover:border-accent/50">
+                  <Link to="/supply-hub/$id" params={{ id: r.pg.id }} key={r.pg.id} className="block rounded-lg border bg-card p-4 hover:border-accent/50 transition-all">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{r.pg.area} · {r.pg.tier} · {r.pg.gender}</div>
@@ -114,6 +123,7 @@ function SupplyHubMatch() {
                         <div className={cn("text-[10px] uppercase tracking-wider font-semibold", rt.color)}>{rt.label}</div>
                       </div>
                     </div>
+                    
                     <div className="mt-2 flex flex-wrap gap-2 text-xs">
                       {r.parts.map((p) => (
                         <span key={p.label} className={cn("rounded border px-1.5 py-0.5", p.pts >= p.max * 0.7 ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-300" : "border-border text-muted-foreground")}>
@@ -121,7 +131,36 @@ function SupplyHubMatch() {
                         </span>
                       ))}
                     </div>
-                    <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+
+                    {/* Commute Optimizer box */}
+                    {r.commuteKm !== null && (
+                      <div className="mt-3 rounded-lg border border-accent/20 bg-accent/5 p-2.5 text-xs">
+                        <div className="flex items-center justify-between font-semibold">
+                          <span className="flex items-center gap-1.5 text-accent text-[11px]">
+                            {transitMode === "2-wheeler" ? "🏍️" : transitMode === "cab" ? "🚗" : "🚇"} Bangalore Commute Optimizer
+                          </span>
+                          <span className={cn(
+                            "px-1.5 py-0.5 rounded text-[10px] font-bold",
+                            cStats.score >= 75 ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" :
+                            cStats.score >= 50 ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" :
+                            "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                          )}>
+                            Commute Score: {cStats.score}/100
+                          </span>
+                        </div>
+                        <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] text-muted-foreground">
+                          <div>
+                            <div>Commute Mode: <span className="text-foreground capitalize font-medium">{transitMode}</span></div>
+                            <div className="mt-0.5">Est. Time: <span className="text-foreground font-semibold">{cStats.normalMins} mins (normal) / {cStats.peakMins} mins (peak)</span></div>
+                          </div>
+                          <div className="md:text-right flex items-center md:justify-end text-accent/80 italic text-[10.5px]">
+                            {cStats.explanation}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
                       <Cell k="Best fit" v={r.bedLabel} />
                       <Cell k="Lead distance" v={r.commuteKm !== null ? `${r.commuteKm} km from ${lead.area}` : "Need map/known area"} />
                       <Cell k="Per day" v={r.bedPrice ? perDayLabel(r.bedPrice) : "—"} />
@@ -138,6 +177,44 @@ function SupplyHubMatch() {
       <style>{`.input{width:100%;border:1px solid hsl(var(--border));background:hsl(var(--background));border-radius:6px;padding:8px 10px;font-size:13px}.input:focus{outline:none;box-shadow:0 0 0 2px hsl(var(--accent)/0.3)}`}</style>
     </AppShell>
   );
+}
+
+function calculateCommuteStats(km: number | null, mode: "2-wheeler" | "cab" | "metro") {
+  if (km === null || km === undefined) return { normalMins: 0, peakMins: 0, score: 0, explanation: "Address needed", timeStr: "—" };
+  let normalMins = 0;
+  let peakMins = 0;
+  let explanation = "";
+  let score = 0;
+
+  if (mode === "2-wheeler") {
+    normalMins = Math.max(3, Math.round(km * 2.2));
+    peakMins = Math.max(5, Math.round(km * 3.5));
+    score = Math.max(10, Math.round(100 - km * 5.5));
+    explanation = "🏍️ Weaves past ORR / Koramangala traffic gaps.";
+  } else if (mode === "cab") {
+    normalMins = Math.max(5, Math.round(km * 3.2));
+    peakMins = Math.max(10, Math.round(km * 6.2));
+    score = Math.max(5, Math.round(100 - km * 8.5));
+    explanation = "🚗 High delays at Silk Board / Marathahalli flyovers.";
+  } else {
+    // Metro
+    const walkToMetro = 7;
+    const metroRide = Math.round(km * 1.5);
+    normalMins = walkToMetro + metroRide + 3;
+    peakMins = normalMins;
+    score = Math.max(15, Math.round(100 - normalMins * 1.6));
+    explanation = "🚇 Traffic-free Metro ride. Avoids road congestion.";
+  }
+
+  score = Math.min(100, Math.max(0, score));
+
+  return {
+    normalMins,
+    peakMins,
+    score,
+    explanation,
+    timeStr: `${normalMins}m / ${peakMins}m peak`
+  };
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

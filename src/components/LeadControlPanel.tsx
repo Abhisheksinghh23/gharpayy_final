@@ -26,7 +26,7 @@ import {
   Phone, MessageSquare, Calendar as CalendarIcon, Tag, ClipboardCheck,
   AlertTriangle, CheckCircle2, X, Activity as ActivityIcon, MapPin,
   Wallet, Send, Zap, IndianRupee, BellRing, ExternalLink, Plus,
-  Building2, Video, Briefcase,
+  Building2, Video, Briefcase, Copy,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import type { Lead, LeadStage, FollowUpPriority, SequenceKind } from "@/lib/types";
@@ -116,6 +116,8 @@ export function LeadControlPanel() {
     tourType: "physical",
   });
   const [tab, setTab] = useState("control");
+  const [playingCall, setPlayingCall] = useState(false);
+  const [callProgress, setCallProgress] = useState(35);
   const [, mounted] = useMountedNow();
 
   // Note state
@@ -221,7 +223,7 @@ export function LeadControlPanel() {
         {/* Body */}
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           <Tabs value={tab} onValueChange={setTab} className="px-5 py-4">
-            <TabsList className="grid h-auto w-full grid-cols-4 gap-1 sm:grid-cols-7">
+            <TabsList className="grid h-auto w-full grid-cols-4 gap-1 sm:grid-cols-8">
               <TabsTrigger value="best-fit" className="text-xs">Best Fit</TabsTrigger>
               <TabsTrigger value="dossier" className="text-xs">Dossier</TabsTrigger>
               <TabsTrigger value="control" className="text-xs">Control</TabsTrigger>
@@ -231,6 +233,7 @@ export function LeadControlPanel() {
               </TabsTrigger>
               <TabsTrigger value="handoff" className="text-xs">Handoff</TabsTrigger>
               <TabsTrigger value="log" className="text-xs">Log</TabsTrigger>
+              <TabsTrigger value="ai-audit" className="text-xs font-bold text-accent">AI Audit</TabsTrigger>
             </TabsList>
 
             <TabsContent value="dossier" className="space-y-4 pt-4">
@@ -616,6 +619,33 @@ export function LeadControlPanel() {
                         onChange={(e) => updatePostTour(target.id, { objectionNote: e.target.value })}
                         className="text-sm resize-none mt-2"
                       />
+                      
+                      {pt.objection && (
+                        <div className="mt-3 rounded-lg border border-accent/20 bg-accent/5 p-3 text-xs space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-accent flex items-center gap-1">
+                              💬 Objection Talk script Battle-Card
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const script = getObjectionScript(pt.objection || "");
+                                navigator.clipboard.writeText(script);
+                                toast.success("Talk script copied!");
+                              }}
+                              className="inline-flex items-center gap-1 rounded bg-accent/15 px-2 py-1 text-[10px] font-medium text-accent hover:bg-accent/25"
+                            >
+                              <Copy className="h-3 w-3" /> Copy script
+                            </button>
+                          </div>
+                          <p className="text-muted-foreground leading-relaxed italic bg-background/50 p-2 rounded border border-border/40 text-[11px]">
+                            "{getObjectionScript(pt.objection)}"
+                          </p>
+                          <div className="text-[10px] text-accent/80 font-medium">
+                            💡 Tip: Reassure the lead with actual cost offsets (food, bills) or security features.
+                          </div>
+                        </div>
+                      )}
                     </Section>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -706,6 +736,135 @@ export function LeadControlPanel() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </Section>
+            </TabsContent>
+
+            {/* AI CALL AUDITOR */}
+            <TabsContent value="ai-audit" className="space-y-4 pt-4">
+              <Section title="AI Call Quality Auditor">
+                <div className="rounded-lg border bg-card p-4 space-y-4">
+                  {/* Waveform Player */}
+                  <div className="bg-muted/40 p-3 rounded-lg border border-border space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-accent flex items-center gap-1">
+                        🔊 Call Recording: AUD_9082.mp3
+                      </span>
+                      <span className="font-mono text-muted-foreground">01:42 / 03:15</span>
+                    </div>
+                    {/* Simulated Waveform */}
+                    <div className="h-10 flex items-end gap-1 px-2 pt-2">
+                      {[12, 18, 14, 25, 30, 42, 18, 12, 15, 28, 35, 48, 22, 14, 18, 32, 45, 12, 16, 20, 38, 42, 28, 14, 22, 35, 18, 12, 25, 38, 42, 14, 18, 28, 12, 24, 32, 18, 14, 22, 45, 38, 25, 12].map((h, i) => (
+                        <div
+                          key={i}
+                          className={cn(
+                            "flex-1 rounded-t transition-all duration-300",
+                            i < 20 ? "bg-accent" : "bg-muted-foreground/35"
+                          )}
+                          style={{ height: `${h}%` }}
+                        />
+                      ))}
+                    </div>
+                    {/* Player controls */}
+                    <div className="flex items-center gap-3 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setPlayingCall(!playingCall)}
+                        className="rounded-full bg-accent text-accent-foreground p-1.5 hover:opacity-90"
+                      >
+                        {playingCall ? (
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6" /></svg>
+                        ) : (
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /></svg>
+                        )}
+                      </button>
+                      <input
+                        type="range" min={0} max={100} value={callProgress}
+                        onChange={(e) => setCallProgress(+e.target.value)}
+                        className="flex-1 accent-accent"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Sentiment and Compliance Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Compliance Scorecard */}
+                    <div className="p-3 border rounded-lg bg-card/60 space-y-2">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Script Compliance (Score: 88%)
+                      </div>
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-emerald-400 font-bold">✓</span>
+                          <span>Welcome &amp; Identity Verify</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-emerald-400 font-bold">✓</span>
+                          <span>Preferred Location Confirm</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-emerald-400 font-bold">✓</span>
+                          <span>Budget Limit Check</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-amber-400 font-bold">⚠</span>
+                          <span className="text-muted-foreground">Commute Optimizer Pitched</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Sentiment Analysis */}
+                    <div className="p-3 border rounded-lg bg-card/60 space-y-2">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Sentiment Scan
+                      </div>
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span>Overall Sentiment:</span>
+                          <span className="text-emerald-400 font-semibold">Positive</span>
+                        </div>
+                        <div className="w-full bg-muted h-2 rounded-full overflow-hidden flex">
+                          <div className="bg-rose-500 h-full" style={{ width: "10%" }} />
+                          <div className="bg-amber-500 h-full" style={{ width: "30%" }} />
+                          <div className="bg-emerald-500 h-full" style={{ width: "60%" }} />
+                        </div>
+                        <div className="flex items-center justify-between text-[9px] text-muted-foreground">
+                          <span>Negative: 10%</span>
+                          <span>Positive: 60%</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dialogue transcript */}
+                  <div className="space-y-2">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Audited Transcription
+                    </div>
+                    <div className="border rounded-md bg-muted/20 p-3 h-48 overflow-y-auto space-y-3 text-xs scrollbar-thin">
+                      <div>
+                        <span className="font-semibold text-accent">{tcm?.name || "Agent"}: </span>
+                        <span className="text-foreground/80">"Hello {lead.name}! I saw you were looking for a PG in {lead.preferredArea || "Bangalore"}. Is that right?"</span>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-info">{lead.name}: </span>
+                        <span className="text-foreground/80">"Yes, correct. I am moving soon, looking for something under ₹{(lead.budget || 15000).toLocaleString()}/month."</span>
+                      </div>
+                      <div className="bg-emerald-500/5 p-1.5 rounded border border-emerald-500/20">
+                        <span className="font-semibold text-accent">{tcm?.name || "Agent"}: </span>
+                        <span className="text-foreground/80">"Great, we have excellent options in {lead.preferredArea} matching your budget. Do your parents have any specific security preferences?"</span>
+                        <div className="text-[9px] text-emerald-400 font-bold mt-1 uppercase tracking-wider">★ AI Highlight: Proactive Safety Pitch</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-info">{lead.name}: </span>
+                        <span className="text-foreground/80">"Yes, security and good food are very important. Is biometric access provided?"</span>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-accent">{tcm?.name || "Agent"}: </span>
+                        <span className="text-foreground/80">"Absolutely. All our verified properties come with 24/7 CCTV, biometric gates, and in-house freshly prepared meals."</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </Section>
             </TabsContent>
@@ -880,4 +1039,23 @@ function toLocal(iso: string) {
 
 function priorityFor(c: number): FollowUpPriority {
   return c >= 75 ? "high" : c >= 50 ? "medium" : "low";
+}
+
+function getObjectionScript(objection: string): string {
+  switch (objection) {
+    case "Budget":
+      return "I understand budget is a key decision factor. Let's break it down: our rent includes 3 meals/day, daily professional cleaning, high-speed Wi-Fi, and power backup. In a standard flat, these bills stack up to ₹6,000+ extra. Here, you pay one clear, predictable amount with zero hidden charges.";
+    case "Location":
+      return "I hear you on the location. If you check our Commute Optimizer, travel time is under 15-20 mins via 2-wheeler. This specific PG keeps you close enough to the tech parks for a short commute, but far enough from the main road dust and vehicle noise for a quiet, peaceful sleep.";
+    case "Amenities":
+      return "You're getting fully-furnished spaces, premium mattresses, washing machines, and refrigerators. Plus, there is high-speed Wi-Fi, power backup, and a shared lounge. Renting or buying these appliances separately would cost you ₹3,000/mo plus heavy logistics. It's ready-to-move-in.";
+    case "Timing":
+      return "I understand you need time. However, this is high-demand peak season and we have only 1-2 beds left in this category. We can take a small refundable token deposit (₹2,000) to lock this room at the current tariff, and you can take 7-10 days to finalize your move.";
+    case "Parents":
+      return "We prioritize safety above all: we have 24/7 CCTV monitoring, biometric access gates, on-site wardens, and emergency assistance. I'd be glad to arrange a direct WhatsApp video call with your parents to show them the security layout live and answer any concerns.";
+    case "Comparing options":
+      return "It's good to look around. When comparing, check if others have SLA-backed maintenance (we resolve requests in 6 hours), if there are broker fees (we have 0 brokerage), and if food is cooked fresh in-house. We provide a fully transparent tenancy contract with no surprises.";
+    default:
+      return "I want to make sure you have the best experience. Let me speak to our Area Operations Manager. We can look at adjusting the lock-in period or customization of the room set-up to make this stay absolutely comfortable for you. What would make this a yes?";
+  }
 }

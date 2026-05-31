@@ -119,6 +119,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       { to: "/myt/zones", label: "Zones", icon: MapPin },
       { to: "/myt/owners-compare", label: "Owners", icon: ShieldCheck },
       { to: "/supply-hub", label: "Supply Hub", icon: Layers },
+      { to: "/activity", label: "Activity Log", icon: Activity },
+      { to: "/health", label: "System Health", icon: HeartPulse },
     ],
     "flow-ops": [
       { to: "/today", label: "Today", icon: Sun, badge: queue.length },
@@ -130,6 +132,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       { to: "/myt/marketplace", label: "Marketplace", icon: Store },
       { to: "/supply-hub", label: "Supply Hub", icon: Layers },
       { to: "/sequences", label: "Outreach", icon: Zap },
+      { to: "/activity", label: "Activity Log", icon: Activity },
+      { to: "/health", label: "System Health", icon: HeartPulse },
     ],
     tcm: [
       { to: "/today", label: "Today", icon: Sun, badge: queue.length },
@@ -141,6 +145,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       { to: "/handoffs", label: "Handoffs", icon: MessageSquare, badge: unreadHandoffs },
       { to: "/myt/marketplace", label: "Marketplace", icon: Store },
       { to: "/myt/tcm/performance", label: "My Stats", icon: Activity },
+      { to: "/activity", label: "Activity Log", icon: Activity },
     ],
     owner: [
       { to: "/owner", label: "Owner Home", icon: ShieldCheck, accent: true },

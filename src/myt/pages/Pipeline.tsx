@@ -211,6 +211,16 @@ export default function Pipeline() {
               <div 
                 key={col.id}
                 className="flex-shrink-0 w-80 rounded-xl border border-border bg-card/45 flex flex-col max-h-[70vh] shadow-sm"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  const leadId = e.dataTransfer.getData("text/plain");
+                  const type = e.dataTransfer.getData("type");
+                  if (type === "arena") {
+                    setLeadStage(leadId, col.id as any);
+                    const targetColLabel = arenaColumns.find(c => c.id === col.id)?.label || col.id;
+                    toast.success(`Moved lead to ${targetColLabel}`);
+                  }
+                }}
               >
                 {/* Column Header */}
                 <div className={`p-3 border-t-4 ${col.color} border-b border-border flex items-center justify-between bg-card rounded-t-xl`}>
@@ -225,7 +235,12 @@ export default function Pipeline() {
                     return (
                       <div 
                         key={lead.id}
-                        className="rounded-lg border border-border bg-card p-3 space-y-3 hover:border-accent/40 shadow-sm transition-all group relative"
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("text/plain", lead.id);
+                          e.dataTransfer.setData("type", "arena");
+                        }}
+                        className="rounded-lg border border-border bg-card p-3 space-y-3 hover:border-accent/40 shadow-sm transition-all group relative cursor-grab active:cursor-grabbing"
                       >
                         <div className="flex justify-between items-start gap-1">
                           <h4 className="font-semibold text-xs text-foreground group-hover:text-accent transition-colors leading-tight">
@@ -302,6 +317,16 @@ export default function Pipeline() {
               <div 
                 key={col.id}
                 className="flex-shrink-0 w-80 rounded-xl border border-border bg-card/45 flex flex-col max-h-[70vh] shadow-sm"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  const ulid = e.dataTransfer.getData("text/plain");
+                  const type = e.dataTransfer.getData("type");
+                  if (type === "identity") {
+                    setLifecycleState(ulid, col.id as any);
+                    const targetColLabel = identityColumns.find(c => c.id === col.id)?.label || col.id;
+                    toast.success(`Updated state to ${targetColLabel}`);
+                  }
+                }}
               >
                 {/* Column Header */}
                 <div className={`p-3 border-t-4 ${col.color} border-b border-border flex items-center justify-between bg-card rounded-t-xl`}>
@@ -314,7 +339,12 @@ export default function Pipeline() {
                   {colLeads.map(lead => (
                     <div 
                       key={lead.ulid}
-                      className="rounded-lg border border-border bg-card p-3 space-y-3 hover:border-accent/40 shadow-sm transition-all group"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("text/plain", lead.ulid);
+                        e.dataTransfer.setData("type", "identity");
+                      }}
+                      className="rounded-lg border border-border bg-card p-3 space-y-3 hover:border-accent/40 shadow-sm transition-all group cursor-grab active:cursor-grabbing"
                     >
                       <div className="flex justify-between items-start gap-1">
                         <h4 className="font-semibold text-xs text-foreground group-hover:text-accent transition-colors leading-tight">

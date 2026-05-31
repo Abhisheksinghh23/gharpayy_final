@@ -64,6 +64,10 @@ interface AppState {
 
   closeDeal: (input: { leadId: string; tourId: string; propertyId: string; tcmId: string; amount: number }) => void;
   addLead: (input: { name: string; phone: string; budget: number; preferredArea: string; moveInDate: string; source?: string; tags?: string[] }) => void;
+  resetDemoData: () => void;
+  seedRandomLeads: () => void;
+  simulateIncomingLead: (leadDetails?: { name?: string; preferredArea?: string; budget?: number }) => void;
+  logSystemActivity: (text: string) => void;
 }
 
 export const useApp = create<AppState>((set, get) => ({
@@ -483,6 +487,129 @@ export const useApp = create<AppState>((set, get) => ({
       kind: "status_changed", actor: "flow-ops", leadId: id,
       text: `New lead registered via public landing page and assigned to ${t.name}`,
     });
+  },
+
+  resetDemoData: () => {
+    set({
+      leads: LEADS,
+      tours: TOURS,
+      activities: ACTIVITIES,
+      followUps: FOLLOWUPS,
+      handoffs: HANDOFFS,
+      sequences: SEQUENCES_INIT,
+      bookings: [],
+      selectedLeadId: null,
+    });
+    pushActivity(set, get, {
+      kind: "status_changed",
+      actor: "system",
+      leadId: "",
+      text: "Demo sandbox reset to default dataset.",
+    });
+  },
+
+  seedRandomLeads: () => {
+    const locations = ["Koramangala", "HSR Layout", "Indiranagar", "Manyata Tech Park", "Whitefield", "Marathahalli", "Bellandur"];
+    const names = ["Rajesh Kumar", "Amit Sharma", "Sneha Patel", "Priyanka Nair", "Vikram Singh", "Aditi Gupta", "Rahul Verma"];
+    const sources = ["Google Adwords", "Facebook Ads", "Website Inquire", "Walk-in", "Referral"];
+    const tagsOptions = [["working"], ["student"], ["urgent"], ["double-sharing"], ["single-sharing"]];
+
+    const seededLeads: Lead[] = [];
+    for (let i = 0; i < 5; i++) {
+      const id = uid("l");
+      const name = names[Math.floor(Math.random() * names.length)] + " " + String(10 + Math.floor(Math.random() * 90));
+      const phone = "9" + Math.floor(100000000 + Math.random() * 900000000);
+      const preferredArea = locations[Math.floor(Math.random() * locations.length)];
+      const budget = Math.floor(12 + Math.random() * 14) * 1000;
+      const moveInDate = new Date(Date.now() + Math.random() * 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const source = sources[Math.floor(Math.random() * sources.length)];
+      const tags = tagsOptions[Math.floor(Math.random() * tagsOptions.length)];
+      
+      const t = get().tcms.find((x) => x.zone.toLowerCase() === preferredArea.toLowerCase()) || get().tcms[i % get().tcms.length];
+
+      const newLead: Lead = {
+        id,
+        name,
+        phone,
+        budget,
+        preferredArea,
+        moveInDate,
+        source,
+        assignedTcmId: t.id,
+        stage: "new",
+        intent: "warm",
+        confidence: 50,
+        tags,
+        nextFollowUpAt: null,
+        responseSpeedMins: Math.floor(2 + Math.random() * 20),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      seededLeads.push(newLead);
+      
+      pushActivity(set, get, {
+        kind: "status_changed", actor: "flow-ops", leadId: id,
+        text: `Seeded dummy lead ${name} assigned to ${t.name} (Zone: ${preferredArea})`,
+      });
+
+      emitConnector({
+        kind: "lead.added",
+        actorRole: "flow-ops",
+        actorId: "flow-ops",
+        leadId: id,
+        text: `New lead registered: ${name} (Zone: ${preferredArea})`,
+      });
+    }
+
+    set((s) => ({ leads: [...seededLeads, ...s.leads] }));
+  },
+
+  simulateIncomingLead: (leadDetails) => {
+    const id = uid("l");
+    const name = leadDetails?.name || `Simulated Lead ${Math.floor(100 + Math.random() * 900)}`;
+    const preferredArea = leadDetails?.preferredArea || "Koramangala";
+    const budget = leadDetails?.budget || 18000;
+    const phone = "9" + Math.floor(100000000 + Math.random() * 900000000);
+    const moveInDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const t = get().tcms.find((x) => x.zone.toLowerCase() === preferredArea.toLowerCase()) || get().tcms[0];
+
+    const newLead: Lead = {
+      id,
+      name,
+      phone,
+      budget,
+      preferredArea,
+      moveInDate,
+      source: "Sandbox Simulation",
+      assignedTcmId: t.id,
+      stage: "new",
+      intent: "hot",
+      confidence: 75,
+      tags: ["simulated", "urgent"],
+      nextFollowUpAt: null,
+      responseSpeedMins: 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    set((s) => ({ leads: [newLead, ...s.leads] }));
+
+    pushActivity(set, get, {
+      kind: "status_changed", actor: "system", leadId: id,
+      text: `Live simulated lead ${name} intake registered (Assigned to TCM: ${t.name})`,
+    });
+
+    emitConnector({
+      kind: "lead.added",
+      actorRole: "flow-ops",
+      actorId: "system",
+      leadId: id,
+      text: `Live Simulated Intake: ${name} looking in ${preferredArea} with budget ₹${budget.toLocaleString()}`,
+    });
+  },
+  logSystemActivity: (text) => {
+    pushActivity(set, get, { kind: "status_changed", actor: "system", text });
   },
 }));
 

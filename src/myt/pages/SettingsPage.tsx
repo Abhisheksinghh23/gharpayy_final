@@ -9,6 +9,7 @@ import {
   type ZoneOrgUnit,
 } from "@/myt/lib/settings-context";
 import { useApp } from "@/lib/store";
+import { emit as emitConnector } from "@/lib/connectors";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,75 @@ import { toast } from "sonner";
 
 export default function SettingsPage() {
   const { settings, update, reset, upsertTemplate, removeTemplate } = useSettings();
+  
+  const resetDemoData = useApp((s) => s.resetDemoData);
+  const seedRandomLeads = useApp((s) => s.seedRandomLeads);
+  const simulateIncomingLead = useApp((s) => s.simulateIncomingLead);
+
+  const [slaTesting, setSlaTesting] = useState(false);
+  const [slaCountdown, setSlaCountdown] = useState(0);
+
+  const startSlaStressTest = () => {
+    if (slaTesting) return;
+    setSlaTesting(true);
+    setSlaCountdown(5);
+    
+    const leadName = `SLA Breach Test Lead ${Math.floor(100 + Math.random() * 900)}`;
+    simulateIncomingLead({
+      name: leadName,
+      preferredArea: "HSR Layout",
+      budget: 16000
+    });
+    
+    toast.success("Simulation started: SLA lead created. 5s countdown initiated...");
+
+    const interval = setInterval(() => {
+      setSlaCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          
+          const appState = useApp.getState();
+          const targetLead = appState.leads.find((l) => l.name === leadName);
+          
+          if (targetLead) {
+            useApp.setState((s) => ({
+              leads: s.leads.map((l) =>
+                l.id === targetLead.id ? { ...l, responseSpeedMins: 25, intent: "hot", confidence: 95 } : l
+              )
+            }));
+            
+            useApp.setState((s) => {
+              const act = {
+                id: `act-${Date.now()}`,
+                ts: new Date().toISOString(),
+                kind: "escalation" as any,
+                actor: "system",
+                leadId: targetLead.id,
+                text: `SLA ESCALATION: Lead ${leadName} neglected beyond response SLA limit. Alerting area Flow Ops lead.`,
+              };
+              return { activities: [act, ...s.activities] };
+            });
+
+            emitConnector({
+              kind: "handoff.sent",
+              actorRole: "system",
+              actorId: "system",
+              leadId: targetLead.id,
+              text: `🚨 SLA BREACH: Lead ${leadName} neglected. Response SLA exceeded! Escalate to Flow Ops lead.`,
+            });
+            
+            toast.error(`💥 SLA BREACH: Lead ${leadName} has breached response limits! Toast generated.`, {
+              duration: 5000,
+            });
+          }
+          
+          setSlaTesting(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
@@ -48,7 +118,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="matching" className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 md:grid-cols-4 xl:grid-cols-9">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 md:grid-cols-4 xl:grid-cols-10">
           <TabsTrigger value="matching">Matching &amp; drawer</TabsTrigger>
           <TabsTrigger value="zones">Zones &amp; team</TabsTrigger>
           <TabsTrigger value="automation">Automation rules</TabsTrigger>
@@ -58,6 +128,7 @@ export default function SettingsPage() {
           <TabsTrigger value="reminders">Reminder timing</TabsTrigger>
           <TabsTrigger value="custom">Custom fields &amp; lists</TabsTrigger>
           <TabsTrigger value="targets">Targets &amp; roadmap</TabsTrigger>
+          <TabsTrigger value="sandbox" className="bg-accent/10 text-accent font-bold hover:bg-accent/20">Demo Sandbox</TabsTrigger>
         </TabsList>
 
         <TabsContent value="matching" className="space-y-3">
@@ -142,6 +213,116 @@ export default function SettingsPage() {
         <TabsContent value="targets" className="space-y-3">
           <TargetsEditor targets={settings.targets} onChange={(v) => update("targets", v)} />
           <RoadmapCard />
+        </TabsContent>
+
+        <TabsContent value="sandbox" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-accent" /> Operations Demo Sandbox Dashboard
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Simulate events, seed records, reset database states, and test operational SLA alerts live.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4 p-4">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-lg border border-border bg-muted/15 p-4 flex flex-col justify-between h-40">
+                  <div>
+                    <h3 className="font-semibold text-sm">Reset Dataset</h3>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Wipe custom changes and restore all leads, tours, activities, and bookings back to clean default states.
+                    </p>
+                  </div>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="w-full mt-2"
+                    onClick={() => {
+                      if (confirm("Are you sure you want to reset the database? This wipes all simulated leads and bookings.")) {
+                        resetDemoData();
+                        toast.success("Demo dataset successfully restored to default mock data!");
+                      }
+                    }}
+                  >
+                    Reset Database State
+                  </Button>
+                </div>
+
+                <div className="rounded-lg border border-border bg-muted/15 p-4 flex flex-col justify-between h-40">
+                  <div>
+                    <h3 className="font-semibold text-sm">Seed Dummy Data</h3>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Prepend 5 dummy leads with randomized budget sizes and locations across active Bangalore zones.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full border-accent text-accent hover:bg-accent/10 mt-2"
+                    onClick={() => {
+                      seedRandomLeads();
+                      toast.success("Pre-populated 5 new random leads into the pipeline!");
+                    }}
+                  >
+                    Seed 5 Leads
+                  </Button>
+                </div>
+
+                <div className="rounded-lg border border-border bg-muted/15 p-4 flex flex-col justify-between h-40">
+                  <div>
+                    <h3 className="font-semibold text-sm">Live Lead Intake</h3>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Simulate a live customer registration. Emits an event which automatically notifies the area TCM roster.
+                    </p>
+                  </div>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="w-full bg-accent text-accent-foreground mt-2"
+                    onClick={() => {
+                      simulateIncomingLead();
+                      toast.success("Live lead intake event fired!");
+                    }}
+                  >
+                    Simulate Live Lead
+                  </Button>
+                </div>
+              </div>
+
+              {/* SLA Stress Tester Section */}
+              <div className="border-t pt-4">
+                <div className="rounded-lg border border-rose-500/20 bg-rose-500/[0.02] p-4">
+                  <div className="flex flex-wrap justify-between items-start gap-4">
+                    <div className="space-y-1 flex-1">
+                      <h3 className="font-semibold text-sm text-rose-350 flex items-center gap-1.5">
+                        🚨 SLA Auto-Escalation Stress Tester
+                      </h3>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Test the system's reaction when a client is left neglected. Clicking this button creates a new lead and launches a fast-forward countdown. When the countdown expires, an SLA breach will be registered, triggering activity log audits and pushing emergency push-notification toast cards.
+                      </p>
+                    </div>
+                    <div className="shrink-0 flex flex-col items-center justify-center min-w-[150px]">
+                      {slaTesting ? (
+                        <div className="text-center py-2">
+                          <div className="text-lg font-bold text-rose-400 animate-pulse">Breaching in {slaCountdown}s</div>
+                          <span className="text-[10px] text-muted-foreground">Neglected lead timer...</span>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="destructive"
+                          onClick={startSlaStressTest}
+                          className="bg-rose-600 hover:bg-rose-500 text-white font-bold"
+                        >
+                          Launch SLA Test
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

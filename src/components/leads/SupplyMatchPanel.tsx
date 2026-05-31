@@ -60,6 +60,7 @@ export function SupplyMatchPanel({ lead, limit, onNavigateAway }: Props) {
   const result = cached ?? generateForLead(lead, settings.matching);
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
   const [showSecondary, setShowSecondary] = useState(false);
+  const [transitMode, setTransitMode] = useState<"2-wheeler" | "cab" | "metro">("2-wheeler");
 
   const cap = limit ?? settings.matching.topMatchCount;
   const visiblePrimary = useMemo(
@@ -143,6 +144,30 @@ export function SupplyMatchPanel({ lead, limit, onNavigateAway }: Props) {
         </div>
       )}
 
+      {/* Transit mode selector widget */}
+      <div className="flex items-center justify-between gap-2 border border-accent/20 bg-accent/5 p-2 rounded-md">
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-accent flex items-center gap-1">
+          <span>🛵 Bangalore Commute</span>
+        </div>
+        <div className="flex gap-1 bg-background/50 p-0.5 rounded border border-border">
+          {(["2-wheeler", "cab", "metro"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setTransitMode(mode)}
+              className={cn(
+                "px-2 py-0.5 rounded text-[9px] capitalize transition font-medium",
+                transitMode === mode
+                  ? "bg-accent text-accent-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-muted"
+              )}
+            >
+              {mode === "2-wheeler" ? "Bike" : mode === "cab" ? "Cab" : "Metro"}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="space-y-1.5">
         {visiblePrimary.map((m, idx) => (
           <MatchCard
@@ -154,6 +179,7 @@ export function SupplyMatchPanel({ lead, limit, onNavigateAway }: Props) {
             onToggle={() => toggleExpanded(m.pg.id)}
             onNavigateAway={onNavigateAway}
             onCopy={copyText}
+            transitMode={transitMode}
           />
         ))}
       </div>
@@ -179,6 +205,7 @@ export function SupplyMatchPanel({ lead, limit, onNavigateAway }: Props) {
                 onToggle={() => toggleExpanded(m.pg.id)}
                 onNavigateAway={onNavigateAway}
                 onCopy={copyText}
+                transitMode={transitMode}
               />
             ))}
         </div>
@@ -195,6 +222,7 @@ function MatchCard({
   onToggle,
   onNavigateAway,
   onCopy,
+  transitMode,
 }: {
   lead: AppLead;
   match: MatchV2;
@@ -203,6 +231,7 @@ function MatchCard({
   onToggle: () => void;
   onNavigateAway?: () => void;
   onCopy: (text: string, label: string) => void;
+  transitMode: "2-wheeler" | "cab" | "metro";
 }) {
   const { settings } = useSettings();
   const sc = scarcity(match.pg);
@@ -289,6 +318,26 @@ function MatchCard({
           </span>
         )}
       </div>
+
+      {/* Commute Info */}
+      {match.distance.km != null && (
+        <div className="mt-2 flex items-center justify-between text-[10px] bg-accent/5 border border-accent/10 px-2 py-1 rounded">
+          <span className="text-muted-foreground flex items-center gap-1">
+            <span>{transitMode === "2-wheeler" ? "🏍️" : transitMode === "cab" ? "🚗" : "🚇"}</span>
+            <span>
+              Est. Commute: <span className="text-foreground font-semibold">{calculateCommuteStats(match.distance.km, transitMode).normalMins}m (normal) / {calculateCommuteStats(match.distance.km, transitMode).peakMins}m (peak)</span>
+            </span>
+          </span>
+          <span className={cn(
+            "px-1.5 py-0.2 rounded font-bold uppercase text-[9px]",
+            calculateCommuteStats(match.distance.km, transitMode).score >= 75 ? "bg-emerald-500/10 text-emerald-400" :
+            calculateCommuteStats(match.distance.km, transitMode).score >= 50 ? "bg-amber-500/10 text-amber-400" :
+            "bg-rose-500/10 text-rose-400"
+          )}>
+            Score: {calculateCommuteStats(match.distance.km, transitMode).score}
+          </span>
+        </div>
+      )}
 
       {/* Compact action row — the only buttons in default state */}
       <div className="mt-1.5 flex flex-wrap items-center gap-1">
@@ -473,4 +522,41 @@ function Row({ k, v }: { k: string; v?: string }) {
   return (
     <div className="truncate"><span className="text-foreground">{k}:</span> {v}</div>
   );
+}
+
+function calculateCommuteStats(km: number | null, mode: "2-wheeler" | "cab" | "metro") {
+  if (km === null || km === undefined) return { normalMins: 0, peakMins: 0, score: 0, explanation: "", timeStr: "—" };
+  let normalMins = 0;
+  let peakMins = 0;
+  let explanation = "";
+  let score = 0;
+
+  if (mode === "2-wheeler") {
+    normalMins = Math.max(3, Math.round(km * 2.2));
+    peakMins = Math.max(5, Math.round(km * 3.5));
+    score = Math.max(10, Math.round(100 - km * 5.5));
+    explanation = "🏍️ Bike lane / ORR traffic";
+  } else if (mode === "cab") {
+    normalMins = Math.max(5, Math.round(km * 3.2));
+    peakMins = Math.max(10, Math.round(km * 6.2));
+    score = Math.max(5, Math.round(100 - km * 8.5));
+    explanation = "🚗 Silk Board flyover delays";
+  } else {
+    const walkToMetro = 7;
+    const metroRide = Math.round(km * 1.5);
+    normalMins = walkToMetro + metroRide + 3;
+    peakMins = normalMins;
+    score = Math.max(15, Math.round(100 - normalMins * 1.6));
+    explanation = "🚇 Traffic-free purple/green lines";
+  }
+
+  score = Math.min(100, Math.max(0, score));
+
+  return {
+    normalMins,
+    peakMins,
+    score,
+    explanation,
+    timeStr: `${normalMins}m / ${peakMins}m peak`
+  };
 }
