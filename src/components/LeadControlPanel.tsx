@@ -28,7 +28,7 @@ import {
   Wallet, Send, Zap, IndianRupee, BellRing, ExternalLink, Plus,
   Building2, Video, Briefcase, Copy,
 } from "lucide-react";
-import { safeFormat, safeFormatDistanceToNow } from "@/lib/utils";
+import { cn, safeFormat, safeFormatDistanceToNow } from "@/lib/utils";
 import type { Lead, LeadStage, FollowUpPriority, SequenceKind } from "@/lib/types";
 import { toast } from "sonner";
 import { useMountedNow } from "@/hooks/use-now";
