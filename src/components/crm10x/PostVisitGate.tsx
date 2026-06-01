@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertTriangle, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
-import { formatDistanceToNow } from "date-fns";
+import { safeFormatDistanceToNow } from "@/lib/utils";
 import { useMountedNow } from "@/hooks/use-now";
 
 /**
@@ -82,7 +82,7 @@ export function PostVisitGate({ lead }: { lead: Lead }) {
         <ShieldAlert className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
         <div className="text-xs">
           <div className="font-bold text-destructive">
-            48h post-visit gate · {mounted ? formatDistanceToNow(new Date(lastVisit!.scheduledAt), { addSuffix: true }) : "recently"}
+            48h post-visit gate · {mounted ? safeFormatDistanceToNow(lastVisit!.scheduledAt, { addSuffix: true }) : "recently"}
           </div>
           <div className="text-foreground/80 mt-0.5">
             You cannot move this lead forward without a decision timeline OR a logged reason.

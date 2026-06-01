@@ -334,7 +334,7 @@ function MessageTimeline({
                 )}
               </div>
               <div className="text-muted-foreground text-[10px]">
-                {new Date(m.ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                {!isNaN(new Date(m.ts).getTime()) ? new Date(m.ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
                 {m.notes && <span> · {m.notes}</span>}
               </div>
             </div>

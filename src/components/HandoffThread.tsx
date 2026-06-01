@@ -2,7 +2,7 @@ import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
-import { format } from "date-fns";
+import { safeFormat } from "@/lib/utils";
 import { Send, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import type { Role } from "@/lib/types";
@@ -55,7 +55,7 @@ export function HandoffThread({ leadId }: { leadId: string }) {
                   <ArrowRight className="h-2.5 w-2.5" />
                   <span>{h.to === "flow-ops" ? "Flow Ops" : h.to === "tcm" ? "TCM" : "HR"}</span>
                   <ClientOnly fallback={<span suppressHydrationWarning>· …</span>}>
-                    <span>· {format(new Date(h.ts), "MMM d, p")}</span>
+                    <span>· {safeFormat(h.ts, "MMM d, p")}</span>
                   </ClientOnly>
                 </div>
                 <div>{h.text}</div>

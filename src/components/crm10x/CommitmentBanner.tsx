@@ -2,7 +2,7 @@ import { useCRM10x } from "@/lib/crm10x/store";
 import type { Lead } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { CalendarClock, CheckCircle2, X } from "lucide-react";
-import { format } from "date-fns";
+import { safeFormat } from "@/lib/utils";
 import { toast } from "sonner";
 
 /** Banner that surfaces the lead's own commitment date — separate from agent follow-ups. */
@@ -21,7 +21,7 @@ export function CommitmentBanner({ lead }: { lead: Lead }) {
       <CalendarClock className="h-4 w-4 mt-0.5 shrink-0" />
       <div className="flex-1 text-xs">
         <div className="font-semibold">
-          Lead committed to decide by {format(due, "EEE, MMM d")} {overdue && "· OVERDUE"}
+          Lead committed to decide by {safeFormat(commitment.decisionBy, "EEE, MMM d")} {overdue && "· OVERDUE"}
         </div>
         <div className="italic text-muted-foreground mt-0.5">"{commitment.exactWords}"</div>
       </div>

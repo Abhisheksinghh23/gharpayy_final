@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Activity, AlertTriangle, ArrowRight, Phone, Trophy, Users, Zap,
 } from "lucide-react";
-import { format } from "date-fns";
+import { safeFormat } from "@/lib/utils";
 import { ConversionIntelligence } from "./ConversionIntelligence";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, CartesianGrid } from "recharts";
 
@@ -91,7 +91,7 @@ export function ManagerDashboard() {
       }
       const moveIn = new Date(l.moveInDate);
       if (moveIn.getTime() < Date.now() && l.stage !== "booked" && l.stage !== "dropped") {
-        flags.push({ kind: "move-in-passed", lead: l, detail: `move-in ${format(moveIn, "MMM d")}`, severity: "high" });
+        flags.push({ kind: "move-in-passed", lead: l, detail: `move-in ${safeFormat(moveIn, "MMM d")}`, severity: "high" });
       }
     });
     return flags.slice(0, 12);
@@ -122,7 +122,7 @@ export function ManagerDashboard() {
     <div className="space-y-6 p-4 md:p-6 max-w-7xl mx-auto">
       <div>
         <h1 className="font-display text-2xl font-bold">Manager Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Numbers only. No lead cards. {format(new Date(), "EEEE, MMM d")}</p>
+        <p className="text-sm text-muted-foreground">Numbers only. No lead cards. {safeFormat(new Date(), "EEEE, MMM d")}</p>
       </div>
 
       {/* Today's pulse */}
@@ -310,7 +310,7 @@ export function ManagerDashboard() {
                   <div className="text-muted-foreground italic">"{c.exactWords}"</div>
                 </div>
                 <div className="text-right">
-                  <div>{format(new Date(c.decisionBy), "MMM d")}</div>
+                  <div>{safeFormat(c.decisionBy, "MMM d")}</div>
                   <div className="text-[10px] capitalize">{c.status}{overdue && " · OVERDUE"}</div>
                 </div>
               </div>
@@ -329,7 +329,7 @@ export function ManagerDashboard() {
               <div key={n.id} className="text-xs border-l-2 border-accent pl-2 py-1">
                 <div className="font-medium">{lead?.name ?? "—"}</div>
                 <div className="text-muted-foreground">{n.text}</div>
-                <div className="text-[10px] text-muted-foreground">{format(new Date(n.ts), "MMM d, p")}</div>
+                <div className="text-[10px] text-muted-foreground">{safeFormat(n.ts, "MMM d, p")}</div>
               </div>
             );
           })}

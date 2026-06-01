@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarClock, CheckCircle2, ChevronDown, ChevronUp, History } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { safeFormat } from "@/lib/utils";
 
 export function LeadDeepProfile({ lead }: { lead: Lead }) {
   const profile = useCRM10x((s) => s.profiles[lead.id]);
@@ -203,7 +203,7 @@ export function LeadDeepProfile({ lead }: { lead: Lead }) {
               </div>
               {f.preferredMoveInDate && (
                 <span className="text-[10px] font-mono text-muted-foreground">
-                  Active: {format(new Date(f.preferredMoveInDate), "MMM d, yyyy")}
+                  Active: {safeFormat(f.preferredMoveInDate, "MMM d, yyyy")}
                 </span>
               )}
             </div>
@@ -227,12 +227,12 @@ export function LeadDeepProfile({ lead }: { lead: Lead }) {
                   <div key={`${h.ts}-${i}`} className="flex items-center justify-between text-[11px]">
                     <span>
                       <span className={i === 0 ? "font-semibold text-foreground" : "text-muted-foreground line-through"}>
-                        {format(new Date(h.shiftingDate), "MMM d, yyyy")}
+                        {safeFormat(h.shiftingDate, "MMM d, yyyy")}
                       </span>
                       {h.reason && <span className="text-muted-foreground"> · {h.reason}</span>}
                     </span>
                     <span className="text-[10px] font-mono text-muted-foreground">
-                      {format(new Date(h.ts), "MMM d")}
+                      {safeFormat(h.ts, "MMM d")}
                     </span>
                   </div>
                 ))}

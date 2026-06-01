@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { useMemo, useState } from "react";
-import { formatDistanceToNow } from "date-fns";
+import { safeFormatDistanceToNow } from "@/lib/utils";
 import type { LeadStage } from "@/lib/types";
 import { useMountedNow } from "@/hooks/use-now";
 import { exportToCSV } from "@/lib/export";
@@ -208,7 +208,7 @@ function LeadsPage() {
                     <div className="text-muted-foreground">{tcm?.zone ?? "—"}</div>
                   </div>
                   <div className="col-span-1 text-right text-[11px] text-muted-foreground">
-                    {mounted ? formatDistanceToNow(new Date(l.updatedAt), { addSuffix: true }) : "—"}
+                    {mounted ? safeFormatDistanceToNow(l.updatedAt, { addSuffix: true }) : "—"}
                   </div>
                 </div>
               );

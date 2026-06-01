@@ -28,7 +28,7 @@ import {
   Wallet, Send, Zap, IndianRupee, BellRing, ExternalLink, Plus,
   Building2, Video, Briefcase, Copy,
 } from "lucide-react";
-import { format, formatDistanceToNow } from "date-fns";
+import { safeFormat, safeFormatDistanceToNow } from "@/lib/utils";
 import type { Lead, LeadStage, FollowUpPriority, SequenceKind } from "@/lib/types";
 import { toast } from "sonner";
 import { useMountedNow } from "@/hooks/use-now";
@@ -195,7 +195,7 @@ export function LeadControlPanel() {
             <ObjectionTag leadId={lead.id} />
           </div>
           <div className="grid grid-cols-3 gap-2 pt-1 text-xs">
-            <Meta icon={CalendarIcon} label="Move-in" value={format(new Date(lead.moveInDate), "MMM d")} />
+            <Meta icon={CalendarIcon} label="Move-in" value={safeFormat(lead.moveInDate, "MMM d")} />
             <Meta icon={Wallet} label="Budget" value={`₹${(lead.budget / 1000).toFixed(0)}k`} />
             <Meta icon={MapPin} label="Area" value={lead.preferredArea} />
           </div>
@@ -213,7 +213,7 @@ export function LeadControlPanel() {
             <div className="text-xs">
               <div className="font-semibold text-destructive">Post-tour update missing</div>
               <div className="text-muted-foreground">
-                Tour completed {mounted ? formatDistanceToNow(new Date(pendingPostTour.scheduledAt), { addSuffix: true }) : "recently"}.
+                Tour completed {mounted ? safeFormatDistanceToNow(pendingPostTour.scheduledAt, { addSuffix: true }) : "recently"}.
                 TCM must fill the form below.
               </div>
             </div>
@@ -371,7 +371,7 @@ export function LeadControlPanel() {
                 </div>
                 {lead.nextFollowUpAt && (
                   <div className="text-[11px] text-muted-foreground">
-                    Due {mounted ? formatDistanceToNow(new Date(lead.nextFollowUpAt), { addSuffix: true }) : "soon"}
+                    Due {mounted ? safeFormatDistanceToNow(lead.nextFollowUpAt, { addSuffix: true }) : "soon"}
                   </div>
                 )}
               </Section>
@@ -439,7 +439,7 @@ export function LeadControlPanel() {
                       const tourId = upcomingTour.id;
                       cancelTour(tourId);
                       toast("Tour cancelled", {
-                        description: `${lead.name} · ${format(new Date(prevAt), "MMM d, p")}`,
+                        description: `${lead.name} · ${safeFormat(prevAt, "MMM d, p")}`,
                         action: {
                           label: "Undo",
                           onClick: () => {
@@ -489,7 +489,7 @@ export function LeadControlPanel() {
                         <div key={t.id} className="rounded-lg border border-border bg-card p-3 text-xs space-y-1">
                           <div className="flex items-center justify-between">
                             <span className="font-medium">{prop?.name}</span>
-                            <span className="text-muted-foreground">{format(new Date(t.scheduledAt), "MMM d, p")}</span>
+                            <span className="text-muted-foreground">{safeFormat(t.scheduledAt, "MMM d, p")}</span>
                           </div>
                           <div className="flex items-center gap-2 text-[11px]">
                             <Badge variant="outline" className="capitalize">{t.status}</Badge>
@@ -524,7 +524,7 @@ export function LeadControlPanel() {
                 return (
                   <div className="space-y-4">
                     <div className="text-xs text-muted-foreground">
-                      Tour at <span className="text-foreground font-medium">{prop?.name}</span> · {format(new Date(target.scheduledAt), "MMM d, p")}
+                      Tour at <span className="text-foreground font-medium">{prop?.name}</span> · {safeFormat(target.scheduledAt, "MMM d, p")}
                     </div>
 
                     {/* Send updates / reminders — one row, always visible post-tour */}
@@ -731,7 +731,7 @@ export function LeadControlPanel() {
                       <div className="flex-1">
                         <div className="text-foreground">{a.text}</div>
                         <div className="text-muted-foreground text-[10px] mt-0.5">
-                          {format(new Date(a.ts), "MMM d, p")} · {a.actor === "system" ? "system" : tcms.find((t) => t.id === a.actor)?.name ?? a.actor}
+                          {safeFormat(a.ts, "MMM d, p")} · {a.actor === "system" ? "system" : tcms.find((t) => t.id === a.actor)?.name ?? a.actor}
                         </div>
                       </div>
                     </div>
@@ -924,7 +924,7 @@ function UpcomingTourCard({
         <Badge className="bg-accent text-accent-foreground capitalize">{tour.status}</Badge>
       </div>
       <div className="text-xs text-muted-foreground">
-        {format(new Date(tour.scheduledAt), "EEE, MMM d · p")} · {tcm?.name}
+        {safeFormat(tour.scheduledAt, "EEE, MMM d · p")} · {tcm?.name}
       </div>
       <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
         <Input
