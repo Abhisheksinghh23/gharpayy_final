@@ -30,3 +30,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Cloned canvas temporary folder
+temp_clone_canvas/
+temp_clone_canvas

@@ -19,7 +19,8 @@ interface AppState {
   setCurrentTcmId: (id: string) => void;
 
   selectedLeadId: string | null;
-  selectLead: (id: string | null) => void;
+  selectedLeadTab: string | null;
+  selectLead: (id: string | null, tab?: string | null) => void;
 
   tcms: TCM[];
   properties: Property[];
@@ -63,7 +64,18 @@ interface AppState {
   advanceSequenceStep: (leadId: string) => void;
 
   closeDeal: (input: { leadId: string; tourId: string; propertyId: string; tcmId: string; amount: number }) => void;
-  addLead: (input: { name: string; phone: string; budget: number; preferredArea: string; moveInDate: string; source?: string; tags?: string[] }) => void;
+  addProperty: (input: Omit<Property, "id" | "daysSinceLastBooking">) => Property;
+  addLead: (input: {
+    name: string;
+    phone: string;
+    source?: string;
+    budget: number;
+    preferredArea: string;
+    moveInDate?: string;
+    intent?: Intent;
+    assignedTcmId?: string;
+    tags?: string[];
+  }) => Lead;
   resetDemoData: () => void;
   seedRandomLeads: () => void;
   simulateIncomingLead: (leadDetails?: { name?: string; preferredArea?: string; budget?: number }) => void;
@@ -77,7 +89,8 @@ export const useApp = create<AppState>((set, get) => ({
   setCurrentTcmId: (id) => set({ currentTcmId: id }),
 
   selectedLeadId: null,
-  selectLead: (id) => set({ selectedLeadId: id }),
+  selectedLeadTab: null,
+  selectLead: (id, tab = null) => set({ selectedLeadId: id, selectedLeadTab: tab }),
 
   tcms: TCMS,
   properties: PROPERTIES,
@@ -461,32 +474,64 @@ export const useApp = create<AppState>((set, get) => ({
     });
   },
 
-  addLead: (input) => {
-    const id = uid("l");
-    const t = get().tcms.find((x) => x.zone.toLowerCase() === input.preferredArea.toLowerCase()) || get().tcms[0];
-    const newLead: Lead = {
-      id,
-      name: input.name,
-      phone: input.phone,
-      budget: input.budget,
-      preferredArea: input.preferredArea,
-      moveInDate: input.moveInDate,
-      source: input.source || "Website Inquire",
-      assignedTcmId: t.id,
-      stage: "new",
-      intent: "warm",
-      confidence: 50,
-      tags: input.tags || [],
-      nextFollowUpAt: null,
-      responseSpeedMins: 5,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+  addProperty: (input) => {
+    const prop: Property = {
+      id: uid("prop"),
+      daysSinceLastBooking: 0,
+      ...input,
     };
-    set((s) => ({ leads: [newLead, ...s.leads] }));
+    set((s) => ({ properties: [prop, ...s.properties] }));
+    return prop;
+  },
+
+  addLead: (input) => {
+    const nowIso = new Date().toISOString();
+    const tcmId =
+      input.assignedTcmId ??
+      autoAssignFn(
+        {
+          ...input,
+          id: "tmp",
+          stage: "new",
+          intent: input.intent ?? "warm",
+          assignedTcmId: "",
+          confidence: 50,
+          tags: input.tags ?? [],
+          nextFollowUpAt: null,
+          responseSpeedMins: 30,
+          source: input.source ?? "Direct",
+          moveInDate: input.moveInDate ?? nowIso,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        } as Lead,
+        get().tcms,
+        get().leads,
+        get().tours,
+      ).tcmId;
+    const lead: Lead = {
+      id: uid("l"),
+      name: input.name.trim(),
+      phone: input.phone.trim(),
+      source: input.source ?? "Direct",
+      budget: input.budget,
+      moveInDate: input.moveInDate ?? nowIso,
+      preferredArea: input.preferredArea,
+      assignedTcmId: tcmId,
+      stage: "new",
+      intent: input.intent ?? "warm",
+      confidence: input.intent === "hot" ? 70 : input.intent === "cold" ? 25 : 50,
+      tags: input.tags ?? [],
+      nextFollowUpAt: null,
+      responseSpeedMins: 30,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    set((s) => ({ leads: [lead, ...s.leads] }));
     pushActivity(set, get, {
-      kind: "status_changed", actor: "flow-ops", leadId: id,
-      text: `New lead registered via public landing page and assigned to ${t.name}`,
+      kind: "lead_created", actor: get().role, leadId: lead.id,
+      text: `Lead created · ${lead.name} (${lead.preferredArea})`,
     });
+    return lead;
   },
 
   resetDemoData: () => {

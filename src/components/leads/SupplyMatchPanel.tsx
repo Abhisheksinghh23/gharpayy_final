@@ -57,7 +57,7 @@ export function SupplyMatchPanel({ lead, limit, onNavigateAway }: Props) {
     generateForLead(lead, settings.matching);
   }, [lead, settings.matching, generateForLead]);
 
-  const result = cached ?? runMatcherV2(lead, settings.matching);
+  const result = cached ?? generateForLead(lead, settings.matching);
   const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
   const [showSecondary, setShowSecondary] = useState(false);
   const [transitMode, setTransitMode] = useState<"2-wheeler" | "cab" | "metro">("2-wheeler");

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useApp } from "@/lib/store";
 import { useCRM10x } from "@/lib/crm10x/store";
@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { waLink } from "@/lib/impact/copy-formats";
 
 /**
  * Mandatory Daily Action Queue.
@@ -67,9 +68,19 @@ export function DailyActionQueue() {
   const { leads, tours, followUps, role, currentTcmId, tcms, selectLead, logCall, sendMessage } = useApp();
   const [now, mounted] = useMountedNow();
   const callAttempts = useCRM10x((s) => s.calls);
-  const [collapsed, setCollapsed] = useState<Record<Band, boolean>>({
-    fire: false, confirm: false, recover: false, nurture: true, prospect: true,
+  const messageOutcomes = useCRM10x((s) => s.messageOutcomes);
+  // Bands expanded by default; user collapse choice persists per browser.
+  const [collapsed, setCollapsed] = useState<Record<Band, boolean>>(() => {
+    if (typeof window === "undefined") return { fire: false, confirm: false, recover: false, nurture: false, prospect: false };
+    try {
+      const raw = window.localStorage.getItem("daq:collapsed");
+      if (raw) return { fire: false, confirm: false, recover: false, nurture: false, prospect: false, ...JSON.parse(raw) };
+    } catch { /* ignore */ }
+    return { fire: false, confirm: false, recover: false, nurture: false, prospect: false };
   });
+  useEffect(() => {
+    try { window.localStorage.setItem("daq:collapsed", JSON.stringify(collapsed)); } catch { /* ignore */ }
+  }, [collapsed]);
 
   const filterTcm = role === "tcm" ? currentTcmId : undefined;
   const queue = useMemo(
@@ -95,11 +106,18 @@ export function DailyActionQueue() {
   const totalToDo = queue.length;
   const fireCount = bands.fire.length;
   const completedToday = mounted
-    ? callAttempts.filter((c) => {
-        if (filterTcm && c.loggedBy !== filterTcm) return false;
-        const sameDay = new Date(c.ts).toDateString() === new Date(now).toDateString();
-        return sameDay;
-      }).length
+    ? (() => {
+        const today = new Date(now).toDateString();
+        const calls = callAttempts.filter((c) => {
+          if (filterTcm && c.loggedBy !== filterTcm) return false;
+          return new Date(c.ts).toDateString() === today;
+        }).length;
+        const msgs = messageOutcomes.filter((m) => {
+          if (filterTcm && m.loggedBy !== filterTcm) return false;
+          return new Date(m.ts).toDateString() === today;
+        }).length;
+        return calls + msgs;
+      })()
     : 0;
 
   return (
@@ -210,8 +228,12 @@ export function DailyActionQueue() {
                           variant="ghost"
                           className="h-8 w-8"
                           onClick={() => {
-                            sendMessage(lead.id, "WhatsApp follow-up sent from Action Queue");
-                            toast.success(`WA sent · ${lead.name}`);
+                            const text = `Hi ${lead.name}, following up on your search in ${lead.preferredArea}. Free for a quick chat?`;
+                            sendMessage(lead.id, text);
+                            if (typeof window !== "undefined" && lead.phone) {
+                              window.open(waLink(lead.phone, text), "_blank", "noopener");
+                            }
+                            toast.success(`WA opened · ${lead.name}`);
                           }}
                           title="WhatsApp"
                         >

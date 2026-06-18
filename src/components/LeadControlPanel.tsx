@@ -22,6 +22,16 @@ import { PostVisitGate } from "./crm10x/PostVisitGate";
 import { CommitmentBanner } from "./crm10x/CommitmentBanner";
 import { ObjectionTag } from "./crm10x/ObjectionLogger";
 import { LeadDossierPanel } from "./crm10x/LeadDossierPanel";
+import { PTQScorecard } from "./crm10x/PTQScorecard";
+import { QuotationBuilder } from "./crm10x/QuotationBuilder";
+import { CheckInPanel } from "./checkins/CheckInPanel";
+import { SmartDossier } from "./crm10x/SmartDossier";
+import { LeadPropertyDossier } from "./impact/LeadPropertyDossier";
+import { CommandActions, useImpactStateForLead } from "./impact/ImpactQueue";
+import { LeadJourneyStepper, type JourneyTab } from "./crm10x/LeadJourneyStepper";
+import { useLeadFocus } from "@/lib/crm10x/lead-focus";
+import { useDossierReadiness } from "@/lib/crm10x/dossier-readiness";
+import { pressureColor } from "@/lib/crm10x/impact-scoring";
 import {
   Phone, MessageSquare, Calendar as CalendarIcon, Tag, ClipboardCheck,
   AlertTriangle, CheckCircle2, X, Activity as ActivityIcon, MapPin,
@@ -70,7 +80,7 @@ type DrawerScheduleAnswers = {
 
 export function LeadControlPanel() {
   const {
-    selectedLeadId, selectLead, leads, properties, tours, activities, tcms,
+    selectedLeadId, selectedLeadTab, selectLead, leads, properties, tours, activities, tcms,
     setLeadStage, setLeadIntent, setLeadFollowUp, addLeadTag, removeLeadTag,
     scheduleTour, cancelTour, rescheduleTour, completeTour, setDecision, updatePostTour,
     addNote, logCall, sendMessage, autoAssignLead, startSequence, closeDeal,
@@ -129,11 +139,20 @@ export function LeadControlPanel() {
   );
   const upcomingTour = leadTours.find((t) => t.status === "scheduled");
 
+  const focus = useLeadFocus(lead);
+  const dossier = useDossierReadiness(lead);
+
   useEffect(() => {
     if (!lead) return;
-    setPropertyId(upcomingTour?.propertyId ?? "");
-    setTcmId(upcomingTour?.tcmId ?? lead.assignedTcmId ?? "");
-    setScheduledAt(upcomingTour ? toLocal(upcomingTour.scheduledAt) : "");
+    setPropertyId(focus.propertyId ?? upcomingTour?.propertyId ?? "");
+    setTcmId(focus.tcmId || upcomingTour?.tcmId || lead.assignedTcmId || "");
+    setScheduledAt(
+      upcomingTour
+        ? toLocal(upcomingTour.scheduledAt)
+        : focus.scheduledAt
+          ? toLocal(focus.scheduledAt)
+          : "",
+    );
     setScheduleAnswers((answers) => ({
       ...answers,
       budget: String(lead.budget || ""),
@@ -142,8 +161,8 @@ export function LeadControlPanel() {
       keyConcern: lead.tags.join(", "),
     }));
     setIsSchedulingAnother(false);
-    setTab(pendingPostTour ? "post" : upcomingTour ? "tour" : settings.matching.drawerDefaultTab);
-  }, [lead, pendingPostTour, upcomingTour, settings.matching.drawerDefaultTab]);
+    setTab(selectedLeadTab ?? (pendingPostTour ? "post" : upcomingTour ? "tour" : settings.matching.drawerDefaultTab));
+  }, [lead?.id, selectedLeadTab, pendingPostTour, upcomingTour, settings.matching.drawerDefaultTab, focus.propertyId, focus.tcmId, focus.scheduledAt]);
 
   if (!lead) return null;
 
@@ -153,6 +172,11 @@ export function LeadControlPanel() {
     if (!propertyId || !tcmId || !scheduledAt) {
       toast.error("Property, TCM and time are required");
       return;
+    }
+    if (!dossier.ready) {
+      toast.warning(`Dossier ${dossier.filledCount}/${dossier.totalCount} — scheduling anyway`, {
+        description: `Still missing: ${dossier.missing.join(", ")}`,
+      });
     }
     scheduleTour({ leadId: lead.id, propertyId, tcmId, scheduledAt: new Date(scheduledAt).toISOString() });
     setPropertyId(""); setTcmId(""); setScheduledAt("");
@@ -202,6 +226,13 @@ export function LeadControlPanel() {
           <div className="text-[11px] text-muted-foreground">Assigned · {tcm?.name ?? "—"} ({tcm?.zone ?? "—"})</div>
         </SheetHeader>
 
+        {/* Guided journey stepper — Dossier → Tour → Post → Quote · Book → Check-in */}
+        <LeadJourneyStepper
+          lead={lead}
+          currentTab={tab}
+          onJump={(t: JourneyTab) => setTab(t)}
+        />
+
         {/* CRM 10x — commitment banner + 48h post-visit gate */}
         <CommitmentBanner lead={lead} />
         <PostVisitGate lead={lead} />
@@ -223,21 +254,25 @@ export function LeadControlPanel() {
         {/* Body */}
         <div className="flex-1 overflow-y-auto scrollbar-thin">
           <Tabs value={tab} onValueChange={setTab} className="px-5 py-4">
-            <TabsList className="grid h-auto w-full grid-cols-4 gap-1 sm:grid-cols-8">
+            <TabsList className="grid h-auto w-full grid-cols-3 gap-1 sm:grid-cols-6">
+              <TabsTrigger value="impact" className="text-xs">Impact</TabsTrigger>
               <TabsTrigger value="best-fit" className="text-xs">Best Fit</TabsTrigger>
-              <TabsTrigger value="dossier" className="text-xs">Dossier</TabsTrigger>
               <TabsTrigger value="control" className="text-xs">Control</TabsTrigger>
-              <TabsTrigger value="tour" className="text-xs">Tour</TabsTrigger>
-              <TabsTrigger value="post" className="text-xs">
-                Post {pendingPostTour && <span className="ml-1 h-1.5 w-1.5 rounded-full bg-destructive" />}
-              </TabsTrigger>
               <TabsTrigger value="handoff" className="text-xs">Handoff</TabsTrigger>
               <TabsTrigger value="log" className="text-xs">Log</TabsTrigger>
               <TabsTrigger value="ai-audit" className="text-xs font-bold text-accent">AI Audit</TabsTrigger>
             </TabsList>
 
+            <TabsContent value="impact" className="space-y-4 pt-4">
+              <ImpactTabContent lead={lead} />
+            </TabsContent>
+
             <TabsContent value="dossier" className="space-y-4 pt-4">
               <LeadDossierPanel lead={lead} />
+            </TabsContent>
+
+            <TabsContent value="checkin" className="space-y-4 pt-4">
+              <CheckInPanel lead={lead} />
             </TabsContent>
 
             <TabsContent value="best-fit" className="space-y-4 pt-4">
@@ -345,6 +380,7 @@ export function LeadControlPanel() {
                   <div>
                     <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Next follow-up</Label>
                     <Input
+                      key={lead.id}
                       type="datetime-local"
                       defaultValue={lead.nextFollowUpAt ? toLocal(lead.nextFollowUpAt) : ""}
                       onChange={(e) => {
@@ -443,7 +479,6 @@ export function LeadControlPanel() {
                         action: {
                           label: "Undo",
                           onClick: () => {
-                            // restore by rescheduling — store doesn't track 'cancelled' undo cleanly
                             useApp.getState().rescheduleTour(tourId, prevAt);
                             useApp.setState((s) => ({
                               tours: s.tours.map((x) => x.id === tourId ? { ...x, status: "scheduled" } : x),
@@ -508,6 +543,11 @@ export function LeadControlPanel() {
               )}
             </TabsContent>
 
+            {/* QUOTATION — inline builder */}
+            <TabsContent value="quote" className="space-y-4 pt-4">
+              <QuotationBuilder lead={lead} />
+            </TabsContent>
+
             {/* POST-TOUR */}
             <TabsContent value="post" className="space-y-4 pt-4">
               {(() => {
@@ -526,6 +566,8 @@ export function LeadControlPanel() {
                     <div className="text-xs text-muted-foreground">
                       Tour at <span className="text-foreground font-medium">{prop?.name}</span> · {safeFormat(target.scheduledAt, "MMM d, p")}
                     </div>
+
+                    <PTQScorecard lead={lead} tour={target} />
 
                     {/* Send updates / reminders — one row, always visible post-tour */}
                     <div className="flex flex-wrap gap-1.5">
@@ -694,6 +736,7 @@ export function LeadControlPanel() {
                           toast.success(`Deal closed · ${lead.name} → ${prop?.name}`, {
                             description: `Bed blocked, MRR +₹${((prop?.pricePerBed ?? 12000) / 1000).toFixed(0)}k`,
                           });
+                          setTab("checkin");
                         }}
                       >
                         <IndianRupee className="h-4 w-4 mr-1.5" /> Close deal · ₹{((prop?.pricePerBed ?? 12000) / 1000).toFixed(0)}k/mo
@@ -1058,4 +1101,35 @@ function getObjectionScript(objection: string): string {
     default:
       return "I want to make sure you have the best experience. Let me speak to our Area Operations Manager. We can look at adjusting the lock-in period or customization of the room set-up to make this stay absolutely comfortable for you. What would make this a yes?";
   }
+}
+
+/**
+ * Impact tab — surfaces the Impact-Queue intelligence (NBA banner, SmartDossier,
+ * property dossier, full CommandActions toolbelt) inside the unified Lead drawer
+ * so every persona sees the same buttons (Dossier/Tour/Quote/Best Fit/Control/
+ * Handoff/Log + Impact) from any entry point.
+ */
+function ImpactTabContent({ lead }: { lead: Lead }) {
+  const state = useImpactStateForLead(lead);
+  if (!state) return null;
+  const { openTour, lastQuote, column, nba, property, tcm } = state;
+  return (
+    <div className="space-y-4">
+      <div className={`rounded-md border px-3 py-2 ${pressureColor(nba.pressure)}`}>
+        <div className="text-[10px] uppercase tracking-wider opacity-70">Next best action</div>
+        <div className="text-sm font-semibold">{nba.label}</div>
+        <div className="text-[10px] opacity-80">{nba.reason}</div>
+      </div>
+      <SmartDossier lead={lead} />
+      <LeadPropertyDossier lead={lead} />
+      <CommandActions
+        lead={lead}
+        tcm={tcm}
+        openTour={openTour}
+        lastQuote={lastQuote}
+        property={property}
+        column={column}
+      />
+    </div>
+  );
 }

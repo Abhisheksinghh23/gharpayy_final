@@ -2,16 +2,18 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
 import { useApp } from "@/lib/store";
 import { ConfidenceBar, IntentChip, StageBadge } from "@/components/atoms";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import { useMemo, useState } from "react";
-import { safeFormatDistanceToNow } from "@/lib/utils";
-import type { LeadStage } from "@/lib/types";
+import { formatDistanceToNow } from "date-fns";
 import { useMountedNow } from "@/hooks/use-now";
-import { exportToCSV } from "@/lib/export";
-import { Download, Trash2, CheckCircle2, Users, AlertTriangle } from "lucide-react";
+import { GlobalFilterBar } from "@/components/filters/GlobalFilterBar";
+import { AnalyticsStrip } from "@/components/analytics/AnalyticsStrip";
+import { useGlobalFilters, applyToLeads } from "@/lib/filters/global";
+import { Button } from "@/components/ui/button";
+import { Trash2, CheckCircle2, Users } from "lucide-react";
 import { toast } from "sonner";
+import { cn, safeFormatDistanceToNow } from "@/lib/utils";
+import type { LeadStage } from "@/lib/types";
 
 export const Route = createFileRoute("/leads")({
   head: () => ({
@@ -21,28 +23,31 @@ export const Route = createFileRoute("/leads")({
 });
 
 function LeadsPage() {
-  const { leads, tcms, selectLead } = useApp();
+  const { leads, tcms, selectLead, setLeadStage, reassignLead } = useApp();
   const [, mounted] = useMountedNow();
-  const [q, setQ] = useState("");
-  const [stage, setStage] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<"confidence" | "moveIn" | "updated">("confidence");
-
-  // Selection state
+  const [f] = useGlobalFilters();
+  const [sortBy, setSortBy] = useState<"confidence" | "moveIn" | "updated" >("confidence");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
+  const tcmZone = useMemo(() => Object.fromEntries(tcms.map((t) => [t.id, t.zone])), [tcms]);
+
   const filtered = useMemo(() => {
-    const list = leads.filter((l) => {
-      if (q && !l.name.toLowerCase().includes(q.toLowerCase()) && !l.phone.includes(q)) return false;
-      if (stage !== "all" && l.stage !== stage) return false;
-      return true;
-    });
+    const list = applyToLeads(leads, f, { tcmZone });
     list.sort((a, b) => {
       if (sortBy === "confidence") return b.confidence - a.confidence;
       if (sortBy === "moveIn") return +new Date(a.moveInDate) - +new Date(b.moveInDate);
       return +new Date(b.updatedAt) - +new Date(a.updatedAt);
     });
     return list;
-  }, [leads, q, stage, sortBy]);
+  }, [leads, f, tcmZone, sortBy]);
+
+  // Bulk operations handlers
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
 
   const toggleSelectAll = () => {
     if (selectedIds.length === filtered.length) {
@@ -52,72 +57,30 @@ function LeadsPage() {
     }
   };
 
-  const toggleSelect = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
-
-  const handleExport = () => {
-    const csvData = filtered.map((l) => {
-      const tcm = tcms.find((t) => t.id === l.assignedTcmId);
-      return {
-        id: l.id,
-        name: l.name,
-        phone: l.phone,
-        source: l.source,
-        stage: l.stage,
-        intent: l.intent,
-        confidence: l.confidence,
-        preferredArea: l.preferredArea,
-        budget: l.budget,
-        assignedTcm: tcm?.name ?? "Unassigned",
-        moveInDate: l.moveInDate,
-        createdAt: l.createdAt,
-      };
-    });
-    
-    exportToCSV(csvData, "gharpayy_leads_export", [
-      "Lead ID", "Name", "Phone Number", "Source", "Current Stage",
-      "Intent Level", "Deal Confidence %", "Preferred Area", "Monthly Budget (₹)",
-      "Assigned Agent", "Target Move-in", "Created Timestamp"
-    ]);
-    toast.success(`Successfully exported ${filtered.length} leads to CSV`);
-  };
-
-  const handleBulkDelete = () => {
-    if (!confirm(`Are you sure you want to delete the ${selectedIds.length} selected leads?`)) return;
-    useApp.setState((s) => ({
-      leads: s.leads.filter((l) => !selectedIds.includes(l.id))
-    }));
-    toast.success(`Successfully deleted ${selectedIds.length} leads`);
-    setSelectedIds([]);
-  };
-
-  const handleBulkStageChange = (newStage: LeadStage) => {
-    useApp.setState((s) => ({
-      leads: s.leads.map((l) =>
-        selectedIds.includes(l.id)
-          ? { ...l, stage: newStage, updatedAt: new Date().toISOString() }
-          : l
-      ),
-    }));
-    toast.success(`Updated stage to "${newStage}" for ${selectedIds.length} leads`);
+  const handleBulkStageChange = (stage: LeadStage) => {
+    if (selectedIds.length === 0) return;
+    selectedIds.forEach((id) => setLeadStage(id, stage));
+    toast.success(`Updated stage to "${stage}" for ${selectedIds.length} leads`);
     setSelectedIds([]);
   };
 
   const handleBulkAssign = (tcmId: string) => {
-    const tcmName = tcms.find((t) => t.id === tcmId)?.name ?? "TCM";
-    useApp.setState((s) => ({
-      leads: s.leads.map((l) =>
-        selectedIds.includes(l.id)
-          ? { ...l, assignedTcmId: tcmId, updatedAt: new Date().toISOString() }
-          : l
-      ),
-    }));
-    toast.success(`Reassigned ${selectedIds.length} leads to agent ${tcmName}`);
+    if (selectedIds.length === 0) return;
+    const t = tcms.find((x) => x.id === tcmId);
+    selectedIds.forEach((id) => reassignLead(id, tcmId, "Bulk operation assignment"));
+    toast.success(`Reassigned ${selectedIds.length} leads to ${t?.name ?? "TCM"}`);
     setSelectedIds([]);
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    if (confirm(`Are you sure you want to delete ${selectedIds.length} leads? This cannot be undone.`)) {
+      useApp.setState((s) => ({
+        leads: s.leads.filter((l) => !selectedIds.includes(l.id)),
+      }));
+      toast.success(`Successfully deleted ${selectedIds.length} leads`);
+      setSelectedIds([]);
+    }
   };
 
   return (
@@ -128,33 +91,21 @@ function LeadsPage() {
             <h1 className="font-display text-2xl font-semibold tracking-tight">Leads</h1>
             <p className="text-sm text-muted-foreground">{filtered.length} of {leads.length} · ranked by deal probability</p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or phone…" className="h-9 w-48 text-sm bg-card" />
-            <Select value={stage} onValueChange={setStage}>
-              <SelectTrigger className="h-9 w-36 text-sm bg-card"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All stages</SelectItem>
-                {(["new","contacted","tour-scheduled","tour-done","negotiation","booked","dropped"] as LeadStage[]).map((s) => (
-                  <SelectItem key={s} value={s} className="capitalize">{s.replace("-", " ")}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
-              <SelectTrigger className="h-9 w-36 text-sm bg-card"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="confidence">Sort: Confidence</SelectItem>
-                <SelectItem value="moveIn">Sort: Move-in date</SelectItem>
-                <SelectItem value="updated">Sort: Last updated</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="outline" size="sm" onClick={handleExport} className="h-9 gap-1 text-xs">
-              <Download className="h-3.5 w-3.5" />
-              Export
-            </Button>
-          </div>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+            <SelectTrigger className="h-9 w-44 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="confidence">Sort: Confidence</SelectItem>
+              <SelectItem value="moveIn">Sort: Move-in date</SelectItem>
+              <SelectItem value="updated">Sort: Last updated</SelectItem>
+            </SelectContent>
+          </Select>
         </header>
 
-        <div className="rounded-xl border border-border bg-card overflow-hidden relative">
+        <GlobalFilterBar hide={["roles", "outcomes"]} />
+
+        <AnalyticsStrip title="Leads pulse" hide={["value"]} />
+
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
           <div className="grid grid-cols-12 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold border-b border-border bg-muted/40 items-center">
             <div className="col-span-1 flex items-center gap-2">
               <input
@@ -171,16 +122,18 @@ function LeadsPage() {
             <div className="col-span-2">Assigned</div>
             <div className="col-span-1 text-right">Updated</div>
           </div>
-          
           <div className="divide-y divide-border">
             {filtered.map((l) => {
               const tcm = tcms.find((t) => t.id === l.assignedTcmId);
               const isSelected = selectedIds.includes(l.id);
               return (
-                <div 
-                  key={l.id} 
+                <div
+                  key={l.id}
                   onClick={() => selectLead(l.id)}
-                  className={`w-full text-left grid grid-cols-12 px-4 py-3 items-center hover:bg-accent/5 transition-colors cursor-pointer ${isSelected ? 'bg-accent/5' : ''}`}
+                  className={cn(
+                    "w-full text-left grid grid-cols-12 px-4 py-3 items-center hover:bg-accent/5 transition-colors cursor-pointer",
+                    isSelected && "bg-accent/5"
+                  )}
                 >
                   <div className="col-span-1 flex items-center" onClick={(e) => e.stopPropagation()}>
                     <input
@@ -281,4 +234,3 @@ function LeadsPage() {
     </AppShell>
   );
 }
-

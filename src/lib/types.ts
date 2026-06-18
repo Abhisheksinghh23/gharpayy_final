@@ -1,4 +1,4 @@
-export type Role = "flow-ops" | "tcm" | "hr" | "owner";
+export type Role = "flow-ops" | "tcm" | "hr" | "owner" | "admin";
 export type Intent = "hot" | "warm" | "cold";
 export type TourStatus = "scheduled" | "completed" | "no-show" | "cancelled";
 export type ClientDecision = "booked" | "thinking" | "dropped" | null;
@@ -18,6 +18,14 @@ export interface TCM {
   zone: string;
   conversionRate: number; // 0-1
   avgResponseMins: number;
+  /** Direct dial / WhatsApp number (E.164 or 10-digit IN). */
+  phone?: string;
+  /** Work email — used for Calendly guest invites and notifications. */
+  email?: string;
+  /** Personal Calendly link — used by "Schedule a tour". */
+  calendly?: string;
+  /** Areas this TCM covers — used by the routing engine to auto-assign. */
+  areas?: string[];
 }
 
 export interface Property {

@@ -46,7 +46,7 @@ function NotFoundComponent() {
 
         <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
-            to="/dashboard"
+            to="/"
             className="w-full sm:w-auto inline-flex h-10 items-center justify-center rounded-lg bg-accent px-5 text-xs font-semibold text-accent-foreground hover:opacity-90 transition-opacity gap-1.5 shadow-md shadow-accent/25"
           >
             <Home className="h-3.5 w-3.5" />

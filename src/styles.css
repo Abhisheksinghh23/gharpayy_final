@@ -57,6 +57,13 @@
   --color-intent-hot: var(--intent-hot);
   --color-intent-warm: var(--intent-warm);
   --color-intent-cold: var(--intent-cold);
+
+  /* Impact Queue priority tiers — 5-color traffic-light system */
+  --color-do-now:   var(--do-now);
+  --color-do-today: var(--do-today);
+  --color-do-soon:  var(--do-soon);
+  --color-do-later: var(--do-later);
+  --color-won:      var(--won);
 }
 
 :root {
@@ -96,6 +103,13 @@
   --intent-hot: oklch(0.585 0.22 27);
   --intent-warm: oklch(0.78 0.16 75);
   --intent-cold: oklch(0.66 0.12 245);
+
+  /* Priority tiers */
+  --do-now:   oklch(0.60 0.24 25);   /* fierce red */
+  --do-today: oklch(0.76 0.17 70);   /* amber */
+  --do-soon:  oklch(0.65 0.14 245);  /* clear blue */
+  --do-later: oklch(0.72 0.02 260);  /* muted slate */
+  --won:      oklch(0.62 0.14 155);  /* settled green */
 
   --sidebar: oklch(0.18 0.012 260);
   --sidebar-foreground: oklch(0.68 0.01 260);
@@ -155,27 +169,4 @@
   }
   .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
   .scrollbar-thin::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 999px; }
-}
-
-@layer utilities {
-  .pip-compact input,
-  .pip-compact textarea,
-  .pip-compact select,
-  .pip-compact button {
-    font-size: 12px;
-  }
-  [data-pip-mode="capture"] .pip-compact,
-  [data-pip-mode="manage"] .pip-compact {
-    max-width: 100vw;
-    overflow-x: hidden;
-  }
-  [data-pip-mode="dashboard"] aside,
-  [data-pip-mode="dashboard"] nav.fixed,
-  [data-pip-mode="dashboard"] header.sticky {
-    display: none !important;
-  }
-  [data-pip-mode="dashboard"] main {
-    padding: 12px !important;
-    max-width: none !important;
-  }
 }
